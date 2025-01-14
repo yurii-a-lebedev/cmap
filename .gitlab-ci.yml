@@ -11,6 +11,9 @@ variables:
 sync:
   stage: sync
   script:
+    - echo "Cleaning up temporary files in target directory..."
+    - find $APP_DIR -type f -name "*.pyc" -exec rm -f {} +
+    - find $APP_DIR -type d -name "__pycache__" -exec rm -rf {} +
     - echo "Synchronizing application files..."
     - rsync -avz --delete ./ $APP_DIR/
     - echo "Application files synchronized."
