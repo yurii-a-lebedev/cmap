@@ -54,4 +54,24 @@ connect_to=db-service:80,external-service:8080
 
     ```
 
-**Важно:** Для повышения безопасности рекомендуется использовать TLS-соединение, особенно для открытых сетей.
+#### Для выгрузки приложения 
+  - Для деплоя на виртуальной машине не забываем править права 
+    ```bash
+    sudo chown -R gitlab-runner:gitlab-runner /data/service/cmap
+    sudo chmod -R 755 /data/service/cmap
+    ```
+Настроить sudo без пароля для пользователя Runner
+
+  - Откройте файл конфигурации sudoers:
+    ```bash
+    sudo visudo
+    ```
+
+  - Добавьте следующую строку:
+    ```bash
+    gitlab-runner ALL=(ALL) NOPASSWD: ALL
+    ```
+    
+Это позволит пользователю gitlab-runner выполнять команды sudo без запроса пароля.
+
+Сохраните изменения и выйдите из редактора.
