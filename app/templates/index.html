@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Containers Status</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+        let allExpanded = false;
+
+        function toggleAllSections() {
+            const sections = document.querySelectorAll('.host-details');
+            const toggleIcon = document.getElementById('toggle-icon');
+            allExpanded = !allExpanded;
+
+            sections.forEach(section => {
+                if (allExpanded) {
+                    section.classList.remove('hidden');
+                } else {
+                    section.classList.add('hidden');
+                }
+            });
+
+            toggleIcon.textContent = allExpanded ? 'expand_less' : 'expand_more';
+        }
+
+        function toggleSection(host) {
+            const section = document.getElementById(`section-${host}`);
+            const button = document.getElementById(`button-${host}`);
+            if (section.classList.contains('hidden')) {
+                section.classList.remove('hidden');
+                button.textContent = '-';
+            } else {
+                section.classList.add('hidden');
+                button.textContent = '+';
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Docker Containers Status</h1>
+    <div class="button-row">
+        <button id="toggle-all-button" class="button-icon" onclick="toggleAllSections()" title="Развернуть/Свернуть все">
+            <i id="toggle-icon" class="material-icons">expand_more</i>
+        </button>
+        <div class="side-buttons">
+            <a href="/map" class="button-icon" title="Карта контейнеров">
+                <i class="material-icons">map</i>
+            </a>
+            <a href="/manage_hosts" class="button-icon" title="Управление хостами">
+                <i class="material-icons">settings</i>
+            </a>
+        </div>
+    </div>
+    {% for host, data in results.items() %}
+        <div class="host-section">
+            <h2 class="{{ data.color }}" onclick="toggleSection('{{ host }}')">
+                <span id="button-{{ host }}" class="toggle-button">+</span>
+                Хост: {{ host }}
+            </h2>
+            <div id="section-{{ host }}" class="host-details hidden">
+                {% if data.error %}
+                    <p style="padding: 15px;">{{ data.error }}</p>
+                {% else %}
+                    <h3 style="padding: 15px;">Запущенные контейнеры</h3>
+                    {% if data.running %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Имя контейнера</th>
+                                <th>Порт хоста</th>
+                                <th>Порт контейнера</th>
+                                <th>Аптайм</th>
+                                <th>Образ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for container in data.running %}
+                                <tr>
+                                    <td>{{ container.name }}</td>
+                                    <td>{{ container.host_port }}</td>
+                                    <td>{{ container.container_port }}</td>
+                                    <td>{{ container.uptime }}</td>
+                                    <td>{{ container.image }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                        <p>Нет запущенных контейнеров</p>
+                    {% endif %}
+                    <h3>Остановленные контейнеры</h3>
+                    {% if data.stopped %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Имя контейнера</th>
+                                <th>Порт хоста</th>
+                                <th>Порт контейнера</th>
+                                <th>Аптайм</th>
+                                <th>Образ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for container in data.stopped %}
+                                <tr>
+                                    <td>{{ container.name }}</td>
+                                    <td>{{ container.host_port }}</td>
+                                    <td>{{ container.container_port }}</td>
+                                    <td>{{ container.uptime }}</td>
+                                    <td>{{ container.image }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                        <p>Нет остановленных контейнеров</p>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+    <div class="summary">
+        <p>Итого: {{ total_running + total_stopped }} | Запущенных контейнеров: {{ total_running }} | Остановленных контейнеров: {{ total_stopped }}</p>
+    </div>
+    <div class="legend">
+        <h3>Легенда:</h3>
+        {% for color, meaning in color_legend.items() %}
+            <div>
+                <span class="{{ color }}"></span>{{ meaning }}
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+

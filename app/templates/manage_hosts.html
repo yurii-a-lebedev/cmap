@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Hosts</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Убираем скролл у полей ввода типа number */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield; /* Для Firefox */
+        }
+    </style>
+    <script>
+        async function fetchHosts() {
+            const response = await fetch("/hosts");
+            const hosts = await response.json();
+            const hostList = document.getElementById("host-list");
+            hostList.innerHTML = "";
+            hosts.forEach(host => {
+                const listItem = document.createElement("li");
+                listItem.textContent = `Host: ${host.host}, Port: ${host.port}`;
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "Удалить";
+                deleteButton.onclick = () => deleteHost(host.id);
+                listItem.appendChild(deleteButton);
+                hostList.appendChild(listItem);
+            });
+        }
+
+        async function addHost(event) {
+            event.preventDefault();
+            const host = document.getElementById("host").value;
+            const port = document.getElementById("port").value;
+
+            const response = await fetch("/hosts", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ host, port })
+            });
+
+            if (response.ok) {
+                document.getElementById("host-form").reset();
+                fetchHosts();
+            }
+        }
+
+        async function deleteHost(id) {
+            const response = await fetch("/hosts", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ id })
+            });
+
+            if (response.ok) {
+                fetchHosts();
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", fetchHosts);
+    </script>
+</head>
+<body>
+    <h1>Manage Hosts</h1>
+    <div class="button-row">
+        <button class="button-icon" onclick="window.history.back()" title="Назад">
+            <i class="material-icons">arrow_back</i>
+        </button>
+    </div>
+    <form id="host-form" onsubmit="addHost(event)">
+        <label for="host">Host:</label>
+        <input type="text" id="host" required>
+        <label for="port">Port:</label>
+        <input type="number" id="port" value="2375" required>
+        <button type="submit">Добавить хост</button>
+    </form>
+    <ul id="host-list"></ul>
+</body>
+</html>
+

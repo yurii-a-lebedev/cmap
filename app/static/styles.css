@@ -1,0 +1,226 @@
+/* Общие стили */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+h1 {
+    text-align: center;
+    padding: 20px;
+    background-color: #0078d7;
+    color: white;
+    margin: 0;
+    border-bottom: 2px solid #005bb5;
+}
+
+/* Кнопки Material Design */
+.button-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px; /* Уменьшенная ширина */
+    height: 50px; /* Уменьшенная высота */
+    margin: 10px;
+    border-radius: 8px; /* Скругленные углы */
+    background-color: #0078d7;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+    border: none;
+    font-size: 14px; /* Уменьшенный размер шрифта */
+    text-decoration: none;
+}
+.button-icon:hover {
+    background-color: #005bb5;
+    box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.2);
+    transform: scale(1.05);
+}
+.button-icon:active {
+    background-color: #003f8c;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+    transform: scale(0.95);
+}
+
+/* Ряд кнопок */
+.button-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 800px;
+    margin: 20px auto;
+}
+.side-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* Блоки и таблицы */
+.host-section, .summary, .legend {
+    margin: 20px auto;
+    max-width: 800px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.summary {
+    text-align: center;
+}
+.legend {
+    background: #f0f0f0;
+    text-align: left;
+}
+.legend div {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+}
+.legend span {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border-radius: 3px;
+}
+.legend .red { background: #d9534f; }
+.legend .yellow { background: #f0ad4e; }
+.legend .blue { background: #0078d7; }
+.legend .green { background: #5cb85c; }
+h2 {
+    padding: 15px;
+    margin: 0;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+h2.red { background: #d9534f; }
+h2.yellow { background: #f0ad4e; }
+h2.blue { background: #0078d7; }
+h2.green { background: #5cb85c; }
+h2 span {
+    font-size: 20px;
+    margin-right: 10px;
+}
+
+/* Таблицы */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+table, th, td {
+    border: 1px solid #ddd;
+}
+th, td {
+    padding: 10px;
+    text-align: center;
+}
+th {
+    background-color: #f4f4f4;
+}
+
+/* Скрытые элементы */
+.hidden {
+    display: none;
+}
+
+/* Стили для страницы карты */
+.map-page {
+    height: calc(100vh - 40px); /* Учитываем отступы и динамическую высоту */
+    overflow: hidden;
+    margin: 20px; /* Минимальные отступы */
+    border: 1px solid #ddd; /* Рамка вокруг карты */
+    background-color: #ffffff; /* Белый фон для карты */
+    border-radius: 8px; /* Скругленные углы */
+}
+
+.map-page svg {
+    width: 100%;
+    height: 100%;
+    display: block; /* Убираем лишние отступы */
+}
+
+.map-page .scroll-container {
+    width: 100%; /* Ширина виртуального холста */
+    height: 100%; /* Высота виртуального холста */
+    position: relative;
+}
+
+.map-page .scroll-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    border-radius: 8px; /* Скругленные углы */
+}
+
+/* Стили для формы на странице управления хостами */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-width: 800px; /* Изменено с 500px на 800px */
+    margin: 20px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+form label {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+form input {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+form button {
+    background-color: #5cb85c;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+form button:hover {
+    background-color: #4cae4c;
+}
+ul {
+    list-style-type: none;
+    padding: 0;
+    max-width: 800px; /* Изменено с 500px на 800px */
+    margin: 20px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+ul li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: #f9f9f9;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+ul li button {
+    background: #d9534f;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+ul li button:hover {
+    background: #c9302c;
+}
+

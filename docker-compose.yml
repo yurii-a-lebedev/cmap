@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  cmap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cmap
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
+    command: gunicorn -w 4 -b 0.0.0.0:5000 app.main:app
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.cmap_https.redirectscheme.scheme=https
+      - traefik.http.routers.cmap.entrypoints=web
+      - traefik.http.routers.cmap.middlewares=cmap_https@docker
+      - traefik.http.routers.cmap.rule=Host(`cmap.mo30.ru`)
+      - traefik.http.routers.cmap_https.entrypoints=websecure
+      - traefik.http.routers.cmap_https.rule=Host(`cmap.mo30.ru`)
+      - traefik.http.routers.cmap_https.tls=true
+      - traefik.http.routers.cmap_https.tls.certresolver=le
+      - traefik.http.services.cmap.loadbalancer.server.port=5000
+    restart: always
+
+networks:
+  default:
+    external: true
+    name: traefik_network
