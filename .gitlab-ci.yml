@@ -14,6 +14,8 @@ sync:
     - echo "Synchronizing application files..."
     - rsync -avz --delete ./ $APP_DIR/
     - echo "Application files synchronized."
+tags:
+  - jump
 
 cleanup:
   stage: cleanup
@@ -21,6 +23,8 @@ cleanup:
     - echo "Cleaning up temporary files..."
     - rm -rf $APP_DIR/app/__pycache__
     - echo "Temporary files cleaned."
+tags:
+  - jump
 
 deploy:
   stage: deploy
@@ -32,5 +36,5 @@ deploy:
     - docker-compose up -d
     - sleep 3
     - docker logs cmap
-  only:
-    - jump
+tags:
+  - jump
