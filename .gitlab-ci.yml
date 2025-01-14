@@ -1,31 +1,20 @@
 stages:
   - sync
-  - cleanup
-  - build
   - deploy
 
 variables:
-  FLASK_ENV: development
   APP_DIR: /data/service/cmap
+  FLASK_ENV: development
+  SQLALCHEMY_DATABASE_URI: sqlite:///hosts.db
 
 sync:
   stage: sync
   script:
-    - echo "Cleaning up temporary files in target directory..."
-    - sudo find $APP_DIR -type f -name "*.pyc" -exec rm -f {} +
-    - sudo find $APP_DIR -type d -name "__pycache__" -exec rm -rf {} +
+    - echo "Cleaning up files in target directory..."
+    - sudo find $APP_DIR -type f -name "*" -exec rm -f {} +
     - echo "Synchronizing application files..."
     - rsync -avz --delete ./ $APP_DIR/
     - echo "Application files synchronized."
-  tags:
-    - jump
-
-cleanup:
-  stage: cleanup
-  script:
-    - echo "Cleaning up temporary files..."
-    - rm -rf $APP_DIR/app/__pycache__
-    - echo "Temporary files cleaned."
   tags:
     - jump
 
@@ -34,10 +23,6 @@ deploy:
   script:
     - echo "Deploying the application..."
     - cd $APP_DIR
-    - docker-compose down -v
-    - rm -rf app/__pycache__
-    - docker-compose up -d
-    - sleep 3
-    - docker logs cmap
+    - sh start.sh
   tags:
     - jump
