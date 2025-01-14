@@ -11,7 +11,7 @@ sync:
   stage: sync
   script:
     - echo "Cleaning up files in target directory..."
-    - sudo find $APP_DIR -type f -name "*" -exec rm -f {} +
+    - sudo find $APP_DIR -mindepth 1 -exec rm -rf {} +
     - echo "Synchronizing application files..."
     - rsync -avz --delete ./ $APP_DIR/
     - echo "Application files synchronized."
