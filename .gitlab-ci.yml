@@ -1,0 +1,36 @@
+stages:
+  - sync
+  - cleanup
+  - build
+  - deploy
+
+variables:
+  FLASK_ENV: development
+  APP_DIR: /data/service/cmap
+
+sync:
+  stage: sync
+  script:
+    - echo "Synchronizing application files..."
+    - rsync -avz --delete ./ $APP_DIR/
+    - echo "Application files synchronized."
+
+cleanup:
+  stage: cleanup
+  script:
+    - echo "Cleaning up temporary files..."
+    - rm -rf $APP_DIR/app/__pycache__
+    - echo "Temporary files cleaned."
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying the application..."
+    - cd $APP_DIR
+    - docker-compose down -v
+    - rm -rf app/__pycache__
+    - docker-compose up -d
+    - sleep 3
+    - docker logs cmap
+  only:
+    - jump
