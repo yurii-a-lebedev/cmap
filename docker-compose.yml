@@ -8,6 +8,7 @@ services:
     container_name: cmap
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FLASK_ENV=development
     command: gunicorn -w 4 -b 0.0.0.0:5000 app.main:app

@@ -1,7 +1,10 @@
 import requests
+import http.client
+import json
 from flask import Flask, render_template, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
+import socket
 
 # Инициализация приложения Flask
 app = Flask(__name__)
@@ -39,18 +42,29 @@ ENABLE_ROUTES = {
 
 # Функция для получения данных о Docker-контейнерах
 def get_docker_containers(remote_host, port):
-    url = f"http://{remote_host}:{port}/containers/json?all=true"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            containers = response.json()
-            for container in containers:
-                container['Labels'] = container.get('Labels', {})
-            return containers
-        else:
-            return f"Ошибка: {response.status_code}, {response.text}"
-    except requests.exceptions.RequestException as e:
-        return f"Не удалось подключиться к хосту: {e}"
+    if remote_host == "localhost":
+        # Используем локальный сокет Docker
+        socket_path = "/var/run/docker.sock"
+        try:
+            conn = http.client.HTTPConnection("localhost")
+            conn.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.sock.connect(socket_path)
+            conn.request("GET", "/containers/json?all=true")
+            response = conn.getresponse()
+            if response.status != 200:
+                return f"Ошибка: {response.status}, {response.reason}"
+            return json.loads(response.read().decode())
+        except Exception as e:
+            return f"Не удалось подключиться к хосту: {e}"
+    else:
+        # Используем стандартный Docker API
+        url = f"http://{remote_host}:{port}/containers/json?all=true"
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return f"Не удалось подключиться к хосту: {e}"
 
 # Список доступных маршрутов
 if ENABLE_ROUTES.get("routes"):
