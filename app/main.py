@@ -26,18 +26,18 @@ def table_exists(table_name):
     inspector = inspect(db.engine)
     return table_name in inspector.get_table_names()
 
-# Создание базы данных и добавление миграции для нового поля при первом запуске
+# Создание базы данных и добавление миграции
 with app.app_context():
     if not table_exists("host"):
         db.create_all()
     else:
-        # Проверяем наличие нового столбца visible_name, если его нет — добавляем
+        # Проверяем наличие столбца visible_name
         inspector = inspect(db.engine)
         columns = [column['name'] for column in inspector.get_columns("host")]
         if "visible_name" not in columns:
+            from sqlalchemy.sql import text
             with db.engine.connect() as connection:
                 connection.execute(text("ALTER TABLE host ADD COLUMN visible_name VARCHAR(120)"))
-
 
 # Флаги включения/выключения маршрутов
 ENABLE_ROUTES = {
