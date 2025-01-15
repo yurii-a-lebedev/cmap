@@ -4,9 +4,9 @@ CMAP (Container Mapping and Analysis Platform) — это веб-приложе�
 ![Скриншот карты контейнеров - 2](screenshot/screenshot_main_2.png)
 *Карта контейнеров*
 
-![Скриншот карты контейнеров - 1](screenshot/screenshot_select_link.png)
-![Скриншот карты контейнеров - 2](screenshot/screenshot_select_link_2.png)
-*Карта контейнеров выбор связей*
+![Скриншот карты контейнеров - 1](screenshot/screenshot_main_select_link.png)
+![Скриншот карты контейнеров - 2](screenshot/screenshot_main_select_link_2.png)
+*Выбор связей между контейнерами*
 
 
 ### Основные возможности:
