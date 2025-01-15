@@ -19,16 +19,24 @@ class Host(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     host = db.Column(db.String(120), nullable=False)
     port = db.Column(db.Integer, nullable=False)
+    visible_name = db.Column(db.String(120), nullable=True)  # Новое поле для видимого имени
 
 # Проверка существования таблицы через инспектор
 def table_exists(table_name):
     inspector = inspect(db.engine)
     return table_name in inspector.get_table_names()
 
-# Создание базы данных при первом запуске
+# Создание базы данных и добавление миграции для нового поля при первом запуске
 with app.app_context():
     if not table_exists("host"):
         db.create_all()
+    else:
+        # Проверяем наличие нового столбца visible_name, если его нет — добавляем
+        column_names = [column.name for column in inspect(Host).columns]
+        if "visible_name" not in column_names:
+            from sqlalchemy.sql import text
+            with db.engine.connect() as connection:
+                connection.execute(text("ALTER TABLE host ADD COLUMN visible_name VARCHAR(120)"))
 
 # Флаги включения/выключения маршрутов
 ENABLE_ROUTES = {
@@ -97,6 +105,7 @@ if ENABLE_ROUTES.get("index"):
         for entry in hosts:
             host = entry.host
             port = entry.port
+            visible_name = entry.visible_name if entry.visible_name else host
             containers = get_docker_containers(host, port)
 
             running_containers = []
@@ -119,7 +128,7 @@ if ENABLE_ROUTES.get("index"):
                         stopped_containers.append(container_data)
                         total_stopped += 1
             else:
-                results[host] = {"error": containers, "color": "red"}
+                results[visible_name] = {"error": containers, "color": "red"}
                 continue
 
             if running_containers:
@@ -131,7 +140,7 @@ if ENABLE_ROUTES.get("index"):
             else:
                 color = "blue"
 
-            results[host] = {
+            results[visible_name] = {
                 "running": running_containers,
                 "stopped": stopped_containers,
                 "color": color
@@ -148,11 +157,11 @@ if ENABLE_ROUTES.get("index"):
 
 # API для управления хостами
 if ENABLE_ROUTES.get("hosts"):
-    @app.route("/hosts", methods=["GET", "POST", "DELETE"])
+    @app.route("/hosts", methods=["GET", "POST", "DELETE", "PATCH"])
     def manage_hosts():
         if request.method == "GET":
             hosts = Host.query.all()
-            return jsonify([{"id": host.id, "host": host.host, "port": host.port} for host in hosts])
+            return jsonify([{"id": host.id, "host": host.host, "port": host.port, "visible_name": host.visible_name} for host in hosts])
 
         if request.method == "POST":
             data = request.json
@@ -170,6 +179,17 @@ if ENABLE_ROUTES.get("hosts"):
                 return jsonify({"message": "Хост удален"}), 200
             return jsonify({"message": "Хост не найден"}), 404
 
+        if request.method == "PATCH":
+            data = request.json
+            host = Host.query.get(data['id'])
+            if host:
+                host.visible_name = data.get('visible_name')
+                db.session.commit()
+                print(f"Updated visible_name for host ID {host.id}: {host.visible_name}")
+                return jsonify({"message": "Имя обновлено"}), 200
+            print(f"Host with ID {data['id']} not found")
+            return jsonify({"message": "Хост не найден"}), 404
+
 # Эндпоинт для карты контейнеров
 if ENABLE_ROUTES.get("containers_map"):
     @app.route("/containers_map", methods=["GET"])
@@ -182,6 +202,7 @@ if ENABLE_ROUTES.get("containers_map"):
         for entry in hosts:
             host = entry.host
             port = entry.port
+            visible_name = entry.visible_name if entry.visible_name else host
             containers = get_docker_containers(host, port)
 
             if isinstance(containers, list):
@@ -196,7 +217,7 @@ if ENABLE_ROUTES.get("containers_map"):
                         "id": container_id,
                         "name": container_name,
                         "state": container_state,
-                        "host": host,  # Имя хоста
+                        "host": visible_name,  # Имя хоста
                         "labels": container_labels
                     })
                     container_ids[container_name] = container_id
