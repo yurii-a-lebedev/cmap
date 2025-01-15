@@ -32,11 +32,12 @@ with app.app_context():
         db.create_all()
     else:
         # Проверяем наличие нового столбца visible_name, если его нет — добавляем
-        column_names = [column.name for column in inspect(Host).columns]
-        if "visible_name" not in column_names:
-            from sqlalchemy.sql import text
+        inspector = inspect(db.engine)
+        columns = [column['name'] for column in inspector.get_columns("host")]
+        if "visible_name" not in columns:
             with db.engine.connect() as connection:
                 connection.execute(text("ALTER TABLE host ADD COLUMN visible_name VARCHAR(120)"))
+
 
 # Флаги включения/выключения маршрутов
 ENABLE_ROUTES = {
