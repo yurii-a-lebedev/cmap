@@ -44,6 +44,13 @@ h1 {
     transform: scale(0.95);
 }
 
+/* Стили для кнопок управления */
+.host-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 /* Ряд кнопок */
 .button-row {
     display: flex;
@@ -210,6 +217,10 @@ ul li {
     margin-bottom: 10px;
     border-radius: 5px;
 }
+ul li span {
+    flex: 1;
+    margin-right: 20px; /* Отступ между текстом "Host" и иконками */
+}
 ul li button {
     background: #d9534f;
     color: white;
@@ -223,4 +234,17 @@ ul li button {
 ul li button:hover {
     background: #c9302c;
 }
+ul li .host-actions {
+    display: flex;
+    gap: 10px; /* Расстояние между иконками */
+    align-items: center;
+}
 
+/* Стили для поля ввода имени */
+.host-actions input[type="text"] {
+    height: 36px; /* Высота совпадает с полем для хоста */
+    padding: 5px 10px;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}

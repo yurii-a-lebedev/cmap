@@ -16,6 +16,7 @@
         input[type=number] {
             -moz-appearance: textfield; /* Для Firefox */
         }
+
     </style>
     <script>
         async function fetchHosts() {
@@ -33,6 +34,8 @@
             hostList.innerHTML = "";
             hosts.forEach(host => {
                 const listItem = document.createElement("li");
+                const actions = document.createElement("div");
+                actions.classList.add("host-actions");
 
                 if (host.host === "localhost") {
                     listItem.textContent = `Host: ${host.host}`;
@@ -52,9 +55,8 @@
                     saveIcon.textContent = "save";
 
                     saveButton.appendChild(saveIcon);
-
-                    listItem.appendChild(editNameInput);
-                    listItem.appendChild(saveButton);
+                    actions.appendChild(editNameInput);
+                    actions.appendChild(saveButton);
                 } else {
                     listItem.textContent = `Host: ${host.host}, Port: ${host.port}`;
                 }
@@ -69,8 +71,9 @@
                 deleteIcon.textContent = "delete";
 
                 deleteButton.appendChild(deleteIcon);
+                actions.appendChild(deleteButton);
 
-                listItem.appendChild(deleteButton);
+                listItem.appendChild(actions);
                 hostList.appendChild(listItem);
             });
         }
@@ -144,4 +147,3 @@
     <ul id="host-list"></ul>
 </body>
 </html>
-
