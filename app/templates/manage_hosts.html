@@ -43,8 +43,15 @@
                     editNameInput.value = host.visible_name || "";
 
                     const saveButton = document.createElement("button");
-                    saveButton.textContent = "Сохранить имя";
+                    saveButton.classList.add("button-icon");
+                    saveButton.title = "Сохранить имя";
                     saveButton.onclick = () => updateHostName(host.id, editNameInput.value);
+
+                    const saveIcon = document.createElement("i");
+                    saveIcon.classList.add("material-icons");
+                    saveIcon.textContent = "save";
+
+                    saveButton.appendChild(saveIcon);
 
                     listItem.appendChild(editNameInput);
                     listItem.appendChild(saveButton);
@@ -53,8 +60,15 @@
                 }
 
                 const deleteButton = document.createElement("button");
-                deleteButton.textContent = "Удалить";
+                deleteButton.classList.add("button-icon");
+                deleteButton.title = "Удалить";
                 deleteButton.onclick = () => deleteHost(host.id);
+
+                const deleteIcon = document.createElement("i");
+                deleteIcon.classList.add("material-icons");
+                deleteIcon.textContent = "delete";
+
+                deleteButton.appendChild(deleteIcon);
 
                 listItem.appendChild(deleteButton);
                 hostList.appendChild(listItem);
@@ -130,3 +144,4 @@
     <ul id="host-list"></ul>
 </body>
 </html>
+
