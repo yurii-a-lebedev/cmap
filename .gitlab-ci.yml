@@ -23,6 +23,12 @@ deploy:
   script:
     - echo "Deploying the application..."
     - cd $APP_DIR
-    - sh start.sh
+    - docker-compose down -v
+    - rm -rf app/__pycache__
+    - docker-compose build --no-cache
+    - docker-compose up -d
+    - sleep 3
+    - docker logs cmap
+
   tags:
     - jump
