@@ -37,8 +37,8 @@ connect_to=db-service:80,external-service:8080
    services:
      app:
        image: my-image
-       labels:
-         - connect_to=db-service:5432,external-service:80
+     labels:
+       connect_to: "db-service:5432,auth-server:8080"
    ```
 
 ### Для работы карты используется порт на удалённом хосте
