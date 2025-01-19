@@ -8,6 +8,51 @@ async function drawMap() {
 
     let selectedNodes = new Set(); // Набор для хранения выбранных узлов
 
+    // Убедимся, что поле поиска добавлено корректно
+    const searchContainer = d3.select("body").append("div")
+        .attr("class", "search-container")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("gap", "10px")
+        .style("position", "absolute")
+        .style("top", "30px")
+        .style("left", "30px")
+        .style("z-index", "1000")
+        .style("background-color", "#fff")
+        .style("padding", "5px")
+        .style("border-radius", "5px")
+        .style("box-shadow", "0 2px 5px rgba(0, 0, 0, 0.2)");
+
+    const searchBox = searchContainer.append("input")
+        .attr("type", "text")
+        .attr("placeholder", "Поиск контейнера ...")
+        .attr("id", "search-box")
+        .style("padding", "8px")
+        .style("border", "1px solid #ccc")
+        .style("border-radius", "5px")
+        .style("width", "200px")
+        .on("input", function () {
+            const query = this.value.toLowerCase();
+            highlightSearch(query);
+        });
+
+    searchContainer.append("button")
+        .attr("id", "reset-button")
+        .style("background", "none")
+        .style("border", "none")
+        .style("cursor", "pointer")
+        .style("padding", "5px")
+        .style("height", "32px")
+        .style("width", "32px")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("justify-content", "center")
+        .html("<svg xmlns='http://www.w3.org/2000/svg' height='32' viewBox='0 0 24 24' width='32' fill='#666'><path d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/></svg>")
+        .on("click", () => {
+            resetHighlight();
+            searchBox.property("value", "");
+        });
+
     // Подсчет количества связей для каждого узла
     const linkCounts = {};
     links.forEach(link => {
@@ -31,7 +76,10 @@ async function drawMap() {
         .call(d3.zoom().on("zoom", (event) => {
             g.attr("transform", event.transform);
         }))
-        .on("click", () => resetHighlight()) // Сброс выделения при клике в пустую область
+        .on("click", () => {
+            resetHighlight();
+            searchBox.property("value", "");
+        })
         .append("g");
 
     const g = svg.append("g");
@@ -165,15 +213,32 @@ async function drawMap() {
         }
     }
 
-    // Функция для сброса выделения
+    // Функция для сброса выделения и поиска
     function resetHighlight() {
         selectedNodes.clear();
 
-        node.selectAll("circle").attr("opacity", 1);
+        node.selectAll("circle").attr("opacity", 1).attr("fill", d => {
+            if (d.state === "running") return "#5cb85c";
+            if (d.state === "created") return "#f0ad4e";
+            if (d.state === "stopped") return "#4d4d4d";
+            if (d.state === "external") return "#87CEEB";
+            return "#cccccc";
+        }).attr("stroke", "#333").attr("stroke-width", 2);
+
         link.attr("stroke", "#666").attr("opacity", 1);
         svg.transition().duration(750).call(
             d3.zoom().transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
         );
+    }
+
+    // Функция для подсветки узлов по поисковому запросу
+    function highlightSearch(query) {
+        node.selectAll("circle")
+            .attr("fill", d => d.name.toLowerCase().includes(query) ? "#FF0000" : d.state === "running" ? "#5cb85c" :
+                d.state === "created" ? "#f0ad4e" : d.state === "stopped" ? "#4d4d4d" :
+                d.state === "external" ? "#87CEEB" : "#cccccc")
+            .attr("stroke", "#333")
+            .attr("stroke-width", 2);
     }
 
     // Функции перетаскивания
