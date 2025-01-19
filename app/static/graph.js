@@ -37,7 +37,7 @@ async function drawMap() {
     const g = svg.append("g");
 
     const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(1000))
+        .force("link", d3.forceLink(links).id(d => d.id).distance(2000)) // Увеличено с 1000 до 2000
         .force("charge", d3.forceManyBody().strength(-2500))
         .force("collide", d3.forceCollide().radius(150))
         .force("center", d3.forceCenter(width / 2, height / 2));
@@ -158,6 +158,11 @@ async function drawMap() {
         // Подсветка узлов
         node.selectAll("circle")
             .attr("opacity", d => (connectedNodes.has(d) || selectedNodes.has(d)) ? 1 : 0.2);
+
+        // Возврат карты в исходное состояние, если все выделения сняты
+        if (selectedNodes.size === 0) {
+            resetHighlight();
+        }
     }
 
     // Функция для сброса выделения
@@ -166,6 +171,9 @@ async function drawMap() {
 
         node.selectAll("circle").attr("opacity", 1);
         link.attr("stroke", "#666").attr("opacity", 1);
+        svg.transition().duration(750).call(
+            d3.zoom().transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+        );
     }
 
     // Функции перетаскивания
@@ -195,4 +203,3 @@ async function drawMap() {
 }
 
 drawMap();
-
