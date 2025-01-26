@@ -1,3 +1,5 @@
+![Логотип CMAP - Кит](screenshot/cmap-logo.png)
+
 CMAP (Container Mapping and Analysis Platform) — это веб-приложение, предназначенное для визуализации инфраструктуры Docker-контейнеров. Оно предоставляет удобный интерфейс визуализации взаимосвязей между контейнерами.
 
 ![Скриншот главной страницы - 1](screenshot/screenshot_main_page.png)
