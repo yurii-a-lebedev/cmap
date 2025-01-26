@@ -124,6 +124,28 @@ async function drawMap() {
         })
         .attr("stroke-width", 2);
 
+    const linkLabels = g.append("g")
+        .selectAll("g")
+        .data(links)
+        .join("g")
+        .attr("class", "link-label-group")
+        .style("visibility", "hidden") // По умолчанию скрыто
+        .each(function (d) {
+            d3.select(this)
+                .append("polygon")
+                .attr("points", "0,-30 30,0 0,30 -30,0") // Увеличенные размеры ромба
+                .attr("fill", "#fff")
+                .attr("stroke", d => portColors[parseInt(d.target_port, 10)] || "#666")
+                .attr("stroke-width", 2);
+
+            d3.select(this)
+                .append("text")
+                .attr("text-anchor", "middle")
+                .attr("dy", "0.35em")
+                .style("font-size", "14px") // Размер шрифта под 5 цифр
+                .text(d => d.target_port);
+        });
+
     // Создание маркера для стрелок
     const defs = svg.append("defs");
 
@@ -197,6 +219,9 @@ async function drawMap() {
             .attr("x2", d => d.target.x)
             .attr("y2", d => d.target.y);
 
+        linkLabels
+            .attr("transform", d => `translate(${(d.source.x + d.target.x) / 2}, ${(d.source.y + d.target.y) / 2})`);
+
         node
             .attr("transform", d => `translate(${d.x},${d.y})`);
     });
@@ -228,6 +253,8 @@ async function drawMap() {
             return "#666";
         }).attr("opacity", d => (connectedLinks.has(d)) ? 1 : 0.2);
 
+        linkLabels.style("visibility", d => connectedLinks.has(d) ? "visible" : "hidden");
+
         // Подсветка узлов
         node.selectAll("circle")
             .attr("opacity", d => (connectedNodes.has(d) || selectedNodes.has(d)) ? 1 : 0.2);
@@ -251,6 +278,8 @@ async function drawMap() {
         }).attr("stroke", "#333").attr("stroke-width", 2);
 
         link.attr("stroke", d => portColors[parseInt(d.target_port, 10)] || "#666").attr("opacity", 1);
+        linkLabels.style("visibility", "hidden");
+
         svg.transition().duration(750).call(
             d3.zoom().transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
         );
