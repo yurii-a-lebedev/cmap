@@ -224,7 +224,7 @@ if ENABLE_ROUTES.get("containers_map"):
                             results["links"].append({
                                 "source": container_id,
                                 "target_service": service.strip(),
-                                "target_port": port.strip()
+                                "target_port": port.strip()  # Добавляем порт в данные связи
                             })
 
         # Добавляем связи, проверяя существующие узлы
@@ -237,7 +237,7 @@ if ENABLE_ROUTES.get("containers_map"):
 
         # Удаляем временные поля
         results["links"] = [
-            {k: v for k, v in link.items() if k not in ["target_service", "target_port"]}
+            {k: v for k, v in link.items() if k not in ["target_service"]}
             for link in results["links"]
         ]
 

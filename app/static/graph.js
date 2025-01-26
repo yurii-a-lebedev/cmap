@@ -1,4 +1,25 @@
 async function drawMap() {
+    const portColors = {
+        80: "#0000FF", // Синий - HTTP
+        443: "#00FF00", // Зеленый - HTTPS
+        5432: "#800080", // Фиолетовый - PostgreSQL
+        3306: "#40E0D0", // Бирюзовый - MySQL
+        6379: "#FFFF00", // Желтый - Redis
+        27017: "#FFA500", // Оранжевый - MongoDB
+        22: "#808080", // Серый - SSH
+        25: "#FFC0CB", // Розовый - SMTP
+        21: "#87CEEB", // Светло-синий - FTP
+        8080: "#00008B", // Темно-синий - HTTP альтернативный
+        3389: "#007FFF", // Лазурный - RDP
+        8443: "#006400", // Темно-зеленый - HTTPS альтернативный
+        53: "#7FFF00", // Салатовый - DNS
+        110: "#FFDAB9", // Персиковый - POP3
+        143: "#8B4513", // Коричневый - IMAP
+        6667: "#800080", // Пурпурный - IRC
+        5060: "#FFD700", // Золотистый - SIP
+        5061: "#FFD700" // Золотистый - SIP (защищенный порт)
+    };
+
     const data = await fetch('/containers_map').then(res => res.json());
     let nodes = data.nodes;
     const links = data.links;
@@ -96,7 +117,10 @@ async function drawMap() {
         .data(links)
         .join("line")
         .attr("class", "link")
-        .attr("stroke", "#666")
+        .attr("stroke", d => {
+            const port = parseInt(d.target_port, 10);
+            return portColors[port] || "#666"; // Цвет по порту или серый, если порт не указан
+        })
         .attr("stroke-width", 2);
 
     // Создание маркера для стрелок
@@ -198,7 +222,7 @@ async function drawMap() {
         // Подсветка связей
         link.attr("stroke", d => {
             if (connectedLinks.has(d)) {
-                return d.source.id === selectedNodes.values().next().value.id ? "#0000ff" : "#ff0000"; // Синий для исходящих, красный для входящих
+                return portColors[parseInt(d.target_port, 10)] || "#000";
             }
             return "#666";
         }).attr("opacity", d => (connectedLinks.has(d)) ? 1 : 0.2);
@@ -225,7 +249,7 @@ async function drawMap() {
             return "#cccccc";
         }).attr("stroke", "#333").attr("stroke-width", 2);
 
-        link.attr("stroke", "#666").attr("opacity", 1);
+        link.attr("stroke", d => portColors[parseInt(d.target_port, 10)] || "#666").attr("opacity", 1);
         svg.transition().duration(750).call(
             d3.zoom().transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
         );
