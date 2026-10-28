@@ -22,9 +22,16 @@ deploy:
     - docker compose up -d --build
     - sleep 5
     - docker logs cmap --tail 40
+    - docker exec cmap python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/')"
     - |
-      code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve cmap.main.tx0.ru:443:127.0.0.1 https://cmap.main.tx0.ru/)
-      echo "health HTTP $code"
-      test "$code" = "200"
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        code=$(curl -sk -o /dev/null -w "%{http_code}" \
+          --resolve cmap.main.tx0.ru:443:192.168.100.200 \
+          https://cmap.main.tx0.ru/ || true)
+        echo "traefik try $i HTTP $code"
+        [ "$code" = "200" ] && exit 0
+        sleep 3
+      done
+      exit 1
   tags:
     - main
