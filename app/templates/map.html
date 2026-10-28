@@ -13,15 +13,23 @@
       <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
       CMAP <span>container map</span>
     </div>
-    <nav class="nav">
-      <a href="/">Контейнеры</a>
-      <a class="active" href="/map">Карта</a>
-      <a href="/manage_hosts">Хосты</a>
-    </nav>
+    <div class="topbar-actions">
+      <button class="btn map-panel-btn" type="button" id="btn-toggle-filters" aria-expanded="false" aria-controls="map-side">Фильтры</button>
+      <nav class="nav">
+        <a href="/">Контейнеры</a>
+        <a class="active" href="/map">Карта</a>
+        <a href="/manage_hosts">Хосты</a>
+      </nav>
+    </div>
   </header>
 
   <div class="map-layout">
-    <aside class="map-side">
+    <button class="map-backdrop" type="button" id="map-backdrop" aria-label="Закрыть панель" hidden></button>
+    <aside class="map-side" id="map-side">
+      <div class="map-panel-head">
+        <h3>Фильтры</h3>
+        <button class="btn map-panel-close" type="button" data-close-panel="filters" aria-label="Закрыть">✕</button>
+      </div>
       <div class="block">
         <h3>Поиск</h3>
         <input class="input" id="search-box" type="search" list="node-names" placeholder="Имя контейнера…">
@@ -70,7 +78,10 @@
     </div>
 
     <aside class="map-drawer" id="drawer">
-      <h3>Узел</h3>
+      <div class="map-panel-head">
+        <h3>Узел</h3>
+        <button class="btn map-panel-close" type="button" data-close-panel="drawer" aria-label="Закрыть">✕</button>
+      </div>
       <div class="drawer-empty" id="drawer-empty">Кликните контейнер на карте. Esc — сброс выделения.</div>
       <div class="drawer-kv" id="drawer-body" hidden></div>
     </aside>

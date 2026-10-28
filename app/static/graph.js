@@ -84,12 +84,52 @@ async function drawMap() {
 
   const svgEl = document.getElementById("map-svg");
   const canvas = svgEl.parentElement;
-  const width = Math.max(canvas.clientWidth || 1200, 320);
-  const height = Math.max(canvas.clientHeight || 800, 320);
+  const mapApp = document.querySelector(".map-app");
+  const backdrop = document.getElementById("map-backdrop");
+  let width = Math.max(canvas.clientWidth || 1200, 320);
+  let height = Math.max(canvas.clientHeight || 800, 320);
   const selectedNodes = new Set();
   let zoomBehavior;
   let fittedOnce = false;
   let layoutReady = false;
+
+  function isCompactMap() {
+    return window.matchMedia("(max-width: 960px)").matches;
+  }
+  function syncPanelState() {
+    if (!mapApp) return;
+    mapApp.classList.toggle(
+      "panel-open",
+      mapApp.classList.contains("filters-open") || mapApp.classList.contains("drawer-open")
+    );
+    if (backdrop) {
+      backdrop.hidden = !mapApp.classList.contains("panel-open");
+    }
+    const filtBtn = document.getElementById("btn-toggle-filters");
+    if (filtBtn) {
+      filtBtn.setAttribute(
+        "aria-expanded",
+        mapApp.classList.contains("filters-open") ? "true" : "false"
+      );
+    }
+  }
+  function openFilters() {
+    if (!mapApp) return;
+    mapApp.classList.add("filters-open");
+    mapApp.classList.remove("drawer-open");
+    syncPanelState();
+  }
+  function openDrawerPanel() {
+    if (!mapApp || !isCompactMap()) return;
+    mapApp.classList.add("drawer-open");
+    mapApp.classList.remove("filters-open");
+    syncPanelState();
+  }
+  function closePanels() {
+    if (!mapApp) return;
+    mapApp.classList.remove("filters-open", "drawer-open", "panel-open");
+    syncPanelState();
+  }
 
   const STORAGE_KEY = "cmap-node-positions-v3";
   let activeProject = "";
@@ -384,11 +424,13 @@ async function drawMap() {
       <div><dt>Порты</dt><dd>${escapeHtml(ports)}</dd></div>
       <div><dt>connect_to</dt><dd>${escapeHtml(d.connect_to || "—")}</dd></div>
     `;
+    openDrawerPanel();
   }
 
   function clearDrawer() {
     document.getElementById("drawer-empty").hidden = false;
     document.getElementById("drawer-body").hidden = true;
+    if (isCompactMap()) closePanels();
   }
 
   function escapeHtml(s) {
@@ -588,7 +630,34 @@ async function drawMap() {
 
   const debouncedSearch = debounce(() => applyFilters({ refit: true }), 200);
   const debouncedPrefix = debounce(() => applyFilters({ refit: true }), 200);
-  const debouncedResize = debounce(() => fitToScreen(true), 200);
+
+  function resizeMap() {
+    const nextW = Math.max(canvas.clientWidth || 320, 280);
+    const nextH = Math.max(canvas.clientHeight || 320, 280);
+    if (Math.abs(nextW - width) < 2 && Math.abs(nextH - height) < 2) {
+      fitToScreen(false);
+      return;
+    }
+    width = nextW;
+    height = nextH;
+    svg.attr("viewBox", `0 0 ${width} ${height}`);
+    simulation.force("center", d3.forceCenter(width / 2, height / 2));
+    Object.keys(projectCenters).forEach((key, i, arr) => {
+      if (key === "_none") {
+        projectCenters[key] = { x: width / 2, y: height / 2 };
+      } else if (key === "external") {
+        projectCenters[key] = { x: width / 2, y: height * 0.12 };
+      } else {
+        const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
+        projectCenters[key] = {
+          x: width / 2 + Math.cos(angle) * Math.min(width, height) * 0.32,
+          y: height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28,
+        };
+      }
+    });
+    fitToScreen(false);
+  }
+  const debouncedResize = debounce(resizeMap, 180);
 
   document.getElementById("search-box").addEventListener("input", debouncedSearch);
   document.getElementById("flt-running").addEventListener("change", () => applyFilters());
@@ -613,10 +682,31 @@ async function drawMap() {
     simulation.alpha(0.6).restart();
     resetHighlight(true);
   });
+  const filtToggle = document.getElementById("btn-toggle-filters");
+  if (filtToggle) {
+    filtToggle.addEventListener("click", () => {
+      if (!mapApp) return;
+      if (mapApp.classList.contains("filters-open")) closePanels();
+      else openFilters();
+    });
+  }
+  document.querySelectorAll("[data-close-panel]").forEach((btn) => {
+    btn.addEventListener("click", () => closePanels());
+  });
+  if (backdrop) backdrop.addEventListener("click", () => closePanels());
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") resetHighlight(true);
+    if (e.key === "Escape") {
+      if (mapApp && mapApp.classList.contains("panel-open")) {
+        closePanels();
+        return;
+      }
+      resetHighlight(true);
+    }
   });
   window.addEventListener("resize", debouncedResize);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", debouncedResize);
+  }
 
   applyFilters();
 }

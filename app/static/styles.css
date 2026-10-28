@@ -27,6 +27,7 @@ html, body {
   margin: 0;
   padding: 0;
   min-height: 100%;
+  min-height: 100dvh;
   font-family: var(--font);
   background:
     radial-gradient(900px 480px at 0% 0%, rgba(15, 157, 138, 0.07), transparent 55%),
@@ -34,12 +35,13 @@ html, body {
     var(--bg);
   color: var(--text);
   line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
 }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.app-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 
 .topbar {
   position: sticky;
@@ -48,12 +50,21 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px 20px;
   padding: 16px 28px;
   background: rgba(238, 242, 246, 0.82);
   border-bottom: 1px solid transparent;
   backdrop-filter: blur(12px);
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.map-panel-btn { display: none; }
 
 .brand {
   display: flex;
@@ -167,8 +178,11 @@ a:hover { text-decoration: underline; }
   border-radius: 12px;
   padding: 11px 14px;
   font: inherit;
-  min-width: 200px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
+.toolbar .input, .toolbar select.input { width: auto; min-width: min(200px, 100%); flex: 1 1 160px; }
 .input:focus, select.input:focus {
   outline: 2px solid rgba(15, 157, 138, 0.22);
   border-color: var(--accent);
@@ -326,22 +340,56 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
 }
 
 /* Map */
-.map-app { height: 100vh; overflow: hidden; background: var(--bg); }
+.map-app {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
 .map-app .topbar {
   position: relative;
+  flex: 0 0 auto;
   background: rgba(238, 242, 246, 0.9);
 }
 .map-layout {
-  height: calc(100vh - 65px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   display: grid;
-  grid-template-columns: 270px 1fr 300px;
+  grid-template-columns: 270px minmax(0, 1fr) 300px;
   gap: 0;
+  position: relative;
+}
+.map-backdrop {
+  display: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(28, 36, 48, 0.28);
+  cursor: pointer;
+}
+.map-panel-head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.map-panel-head h3 { margin: 0; }
+.map-panel-close {
+  padding: 6px 10px;
+  min-width: 36px;
+  line-height: 1;
 }
 .map-side, .map-drawer {
   background: rgba(255, 255, 255, 0.72);
   border-right: 1px solid var(--line);
   padding: 20px 18px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
 }
 .map-drawer {
   border-right: 0;
@@ -356,10 +404,13 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   font-weight: 600;
 }
 .map-side .block { margin-bottom: 24px; }
+.map-side .input { width: 100%; }
 .map-canvas {
   position: relative;
   background-color: #f8fafc;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 .map-canvas::before {
   content: "";
@@ -389,6 +440,7 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   height: 100%;
   display: block;
   cursor: grab;
+  touch-action: none;
 }
 .map-canvas > svg:active { cursor: grabbing; }
 
@@ -452,12 +504,99 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+@media (max-width: 1180px) {
+  .map-layout { grid-template-columns: 240px minmax(0, 1fr) 260px; }
+}
+
 @media (max-width: 960px) {
+  .page { width: calc(100% - 24px); margin: 20px auto 40px; }
+  .page-head { margin-bottom: 18px; gap: 12px; }
+  .page-head h1 { font-size: 1.55rem; }
+  .page-head p { font-size: 0.92rem; }
+  .topbar { padding: 10px 12px; gap: 10px; flex-wrap: wrap; }
+  .brand span { display: none; }
+  .nav { gap: 2px; padding: 3px; }
+  .nav a { padding: 7px 10px; font-size: 0.82rem; }
+  .chip-row { gap: 8px; margin-bottom: 16px; }
+  .chip { padding: 6px 10px; font-size: 0.8rem; }
+  .toolbar { gap: 8px; margin-bottom: 16px; }
+  .toolbar .btn { flex: 1 1 auto; }
+  .card-head { padding: 14px 14px; gap: 10px; }
+  .card-body { padding: 4px 14px 14px; }
+  th, td { padding: 10px 12px; }
+  .form-card { max-width: none; padding: 16px; }
+  .host-item { padding: 14px; }
+  .host-actions { width: 100%; }
+  .host-actions .input { flex: 1 1 140px; }
+
+  .map-panel-btn { display: inline-flex; padding: 7px 12px; font-size: 0.82rem; }
+  .map-panel-head { display: flex; }
   .map-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
-  .map-side, .map-drawer { max-height: 220px; }
-  .page { width: calc(100% - 28px); margin-top: 24px; }
-  .topbar { padding: 12px 16px; }
+  .map-canvas {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 280px;
+  }
+  .map-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .map-app.panel-open .map-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .map-side, .map-drawer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(340px, 88vw);
+    max-height: none;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 12px 40px rgba(28, 36, 48, 0.16);
+    transition: transform 0.22s ease;
+  }
+  .map-side {
+    left: 0;
+    border-right: 1px solid var(--line);
+    border-left: 0;
+    transform: translateX(-105%);
+  }
+  .map-drawer {
+    right: 0;
+    left: auto;
+    border-left: 1px solid var(--line);
+    border-right: 0;
+    transform: translateX(105%);
+  }
+  .map-app.filters-open .map-side { transform: translateX(0); }
+  .map-app.drawer-open .map-drawer { transform: translateX(0); }
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 8px 10px; }
+  .brand { font-size: 1rem; gap: 8px; }
+  .brand-mark { width: 24px; height: 24px; }
+  .nav a { padding: 6px 8px; font-size: 0.78rem; }
+  .map-panel-btn { padding: 6px 10px; }
+  .page { width: calc(100% - 16px); }
+  .page-head h1 { font-size: 1.35rem; }
+  .map-side, .map-drawer { width: min(100vw - 28px, 360px); padding: 16px 14px; }
+  .map-canvas::before {
+    background-size: min(72vmin, 360px);
+  }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  .map-side, .map-drawer {
+    width: min(300px, 52vw);
+  }
 }
