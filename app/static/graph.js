@@ -37,8 +37,8 @@ async function drawMap() {
 
   const linkedIds = new Set();
   links.forEach((l) => {
-    linkedIds.add(typeof l.source === "object" ? l.source.id : l.source);
-    linkedIds.add(typeof l.target === "object" ? l.target.id : l.target);
+    linkedIds.add(l.source);
+    linkedIds.add(l.target);
   });
 
   links.forEach((link) => {
@@ -66,26 +66,31 @@ async function drawMap() {
   });
 
   const portLegend = document.getElementById("port-legend");
-  const usedPorts = [...new Set(links.map((l) => String(l.target_port)))].sort();
+  const usedPorts = [...new Set(links.map((l) => String(l.target_port)))].sort(
+    (a, b) => Number(a) - Number(b)
+  );
   usedPorts.forEach((p) => {
     const item = document.createElement("div");
     item.className = "legend-item";
     const sw = document.createElement("span");
     sw.className = "swatch";
     sw.style.background = portColors[p] || "#666";
-    item.append(sw, document.createTextNode(`${p}${portNames[p] ? " · " + portNames[p] : ""}`));
+    item.append(
+      sw,
+      document.createTextNode(`${p}${portNames[p] ? " · " + portNames[p] : ""}`)
+    );
     portLegend.appendChild(item);
   });
 
   const svgEl = document.getElementById("map-svg");
   const canvas = svgEl.parentElement;
-  const width = canvas.clientWidth || 1200;
-  const height = canvas.clientHeight || 800;
+  const width = Math.max(canvas.clientWidth || 1200, 320);
+  const height = Math.max(canvas.clientHeight || 800, 320);
   const selectedNodes = new Set();
   let zoomBehavior;
-  let currentTransform = d3.zoomIdentity;
+  let fittedOnce = false;
 
-  const STORAGE_KEY = "cmap-node-positions-v1";
+  const STORAGE_KEY = "cmap-node-positions-v2";
   const saved = (() => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -93,12 +98,16 @@ async function drawMap() {
       return {};
     }
   })();
-  nodes.forEach((n) => {
-    if (saved[n.id]) {
+
+  // Стартовые координаты без фиксации — иначе Fit обязателен вручную
+  nodes.forEach((n, i) => {
+    if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
       n.x = saved[n.id].x;
       n.y = saved[n.id].y;
-      n.fx = saved[n.id].x;
-      n.fy = saved[n.id].y;
+    } else {
+      const angle = (i / nodes.length) * Math.PI * 2;
+      n.x = width / 2 + Math.cos(angle) * 180;
+      n.y = height / 2 + Math.sin(angle) * 180;
     }
   });
 
@@ -109,7 +118,6 @@ async function drawMap() {
     .zoom()
     .scaleExtent([0.15, 4])
     .on("zoom", (event) => {
-      currentTransform = event.transform;
       g.attr("transform", event.transform);
     });
   svg.call(zoomBehavior);
@@ -121,14 +129,15 @@ async function drawMap() {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(140)
-        .strength(0.6)
+        .distance(150)
+        .strength(0.55)
     )
-    .force("charge", d3.forceManyBody().strength(-420))
-    .force("collide", d3.forceCollide().radius(42))
+    .force("charge", d3.forceManyBody().strength(-480))
+    .force("collide", d3.forceCollide().radius(46))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("x", d3.forceX(width / 2).strength(0.05))
-    .force("y", d3.forceY(height / 2).strength(0.05));
+    .force("x", d3.forceX(width / 2).strength(0.04))
+    .force("y", d3.forceY(height / 2).strength(0.04))
+    .alphaDecay(0.03);
 
   const link = g
     .append("g")
@@ -186,14 +195,20 @@ async function drawMap() {
     .data(nodes)
     .join("g")
     .attr("class", "node")
+    .style("cursor", "pointer")
     .call(drag(simulation))
     .on("click", (event, d) => {
       event.stopPropagation();
       if (selectedNodes.has(d)) selectedNodes.delete(d);
-      else selectedNodes.add(d);
+      else {
+        selectedNodes.clear();
+        selectedNodes.add(d);
+      }
       highlightConnections();
       showDrawer(d);
     });
+
+  node.append("title").text((d) => d.name);
 
   node
     .append("circle")
@@ -204,14 +219,30 @@ async function drawMap() {
     .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5))
     .attr("stroke-dasharray", (d) => (d.state === "external" ? "4 3" : null));
 
-  node
+  const label = node.append("g").attr("class", "node-label").attr("transform", "translate(0,34)");
+  label
+    .append("rect")
+    .attr("rx", 6)
+    .attr("fill", "rgba(14,18,24,0.88)")
+    .attr("stroke", "#2a3444");
+  label
     .append("text")
     .attr("text-anchor", "middle")
-    .attr("dy", 36)
+    .attr("dy", "0.35em")
     .style("fill", "#e7edf6")
-    .style("font-size", "11px")
+    .style("font-size", "12px")
     .style("font-weight", "600")
-    .text((d) => truncate(d.name, 18));
+    .text((d) => truncate(d.name, 20));
+
+  label.each(function () {
+    const text = this.querySelector("text");
+    const rect = this.querySelector("rect");
+    const box = text.getBBox();
+    rect.setAttribute("x", box.x - 6);
+    rect.setAttribute("y", box.y - 3);
+    rect.setAttribute("width", box.width + 12);
+    rect.setAttribute("height", box.height + 6);
+  });
 
   simulation.on("tick", () => {
     link
@@ -224,11 +255,20 @@ async function drawMap() {
       (d) => `translate(${(d.source.x + d.target.x) / 2},${(d.source.y + d.target.y) / 2})`
     );
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    if (!fittedOnce && simulation.alpha() < 0.12) {
+      fittedOnce = true;
+      fitToScreen(false);
+      persistPositions();
+    }
   });
 
   simulation.on("end", () => {
+    if (!fittedOnce) {
+      fittedOnce = true;
+      fitToScreen(false);
+    }
     persistPositions();
-    fitToScreen(false);
   });
 
   function nodeColor(d) {
@@ -246,7 +286,7 @@ async function drawMap() {
   function persistPositions() {
     const out = {};
     nodes.forEach((n) => {
-      out[n.id] = { x: n.x, y: n.y };
+      if (Number.isFinite(n.x) && Number.isFinite(n.y)) out[n.id] = { x: n.x, y: n.y };
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
   }
@@ -255,28 +295,28 @@ async function drawMap() {
     const xs = nodes.map((n) => n.x).filter(Number.isFinite);
     const ys = nodes.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
+    const minX = Math.min(...xs) - 40;
+    const maxX = Math.max(...xs) + 40;
+    const minY = Math.min(...ys) - 40;
+    const maxY = Math.max(...ys) + 40;
     const bw = Math.max(maxX - minX, 1);
     const bh = Math.max(maxY - minY, 1);
-    const pad = 80;
-    const scale = Math.min((width - pad) / bw, (height - pad) / bh, 1.8) * 0.9;
+    const pad = 56;
+    const scale = Math.min((width - pad) / bw, (height - pad) / bh, 2.2) * 0.92;
     const tx = width / 2 - (scale * (minX + maxX)) / 2;
     const ty = height / 2 - (scale * (minY + maxY)) / 2;
     const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
-    const sel = animate ? svg.transition().duration(500) : svg;
+    const sel = animate ? svg.transition().duration(450) : svg;
     sel.call(zoomBehavior.transform, t);
   }
 
   function focusNode(d) {
-    const scale = Math.max(currentTransform.k, 1.2);
+    const scale = 1.35;
     const t = d3.zoomIdentity
       .translate(width / 2, height / 2)
       .scale(scale)
       .translate(-d.x, -d.y);
-    svg.transition().duration(450).call(zoomBehavior.transform, t);
+    svg.transition().duration(400).call(zoomBehavior.transform, t);
   }
 
   function showDrawer(d) {
@@ -286,7 +326,10 @@ async function drawMap() {
     body.hidden = false;
     const ports =
       (d.ports || [])
-        .map((p) => `${p.public || "—"}→${p.private}/${p.type || "tcp"}`)
+        .map((p) => {
+          if (p.public) return `${p.public}→${p.private}/${p.type || "tcp"}`;
+          return `${p.private}/${p.type || "tcp"}`;
+        })
         .join(", ") || "—";
     body.innerHTML = `
       <div><dt>Имя</dt><dd>${escapeHtml(d.name)}</dd></div>
@@ -370,8 +413,12 @@ async function drawMap() {
       if (isExt && !showExternal) ok = false;
       if (isRun && !showRunning) ok = false;
       if (isStop && !showStopped) ok = false;
-      if (onlyOrphan && linkedIds.has(d.id) && !String(d.id).startsWith("external:")) ok = false;
-      if (prefix && !(d.name || "").toLowerCase().includes(prefix) && !(d.project || "").toLowerCase().includes(prefix))
+      if (onlyOrphan && linkedIds.has(d.id)) ok = false;
+      if (
+        prefix &&
+        !(d.name || "").toLowerCase().includes(prefix) &&
+        !(d.project || "").toLowerCase().includes(prefix)
+      )
         ok = false;
       if (q && !(d.name || "").toLowerCase().includes(q)) ok = false;
       if (ok) visible.add(d.id);
@@ -384,12 +431,21 @@ async function drawMap() {
 
     if (q) {
       const matches = nodes.filter((d) => visible.has(d.id) && d.name.toLowerCase().includes(q));
-      node.selectAll("circle").attr("stroke", (d) =>
-        matches.includes(d) ? "#ff5a5a" : d.state === "external" ? "#6aa8ff" : "#2a3444"
-      );
-      if (matches.length === 1) focusNode(matches[0]);
+      node
+        .selectAll("circle")
+        .attr("stroke", (d) =>
+          matches.includes(d) ? "#ff5a5a" : d.state === "external" ? "#6aa8ff" : "#2a3444"
+        )
+        .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2.5 : 1.5));
+      if (matches.length === 1) {
+        focusNode(matches[0]);
+        showDrawer(matches[0]);
+      }
     } else {
-      node.selectAll("circle").attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"));
+      node
+        .selectAll("circle")
+        .attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"))
+        .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5));
     }
   }
 
@@ -407,6 +463,8 @@ async function drawMap() {
       })
       .on("end", (event) => {
         if (!event.active) sim.alphaTarget(0);
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
         persistPositions();
       });
   }
@@ -424,13 +482,20 @@ async function drawMap() {
   document.getElementById("btn-zoom-out").addEventListener("click", () => {
     svg.transition().duration(200).call(zoomBehavior.scaleBy, 0.8);
   });
-  document.getElementById("btn-reset").addEventListener("click", () => resetHighlight(true));
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    nodes.forEach((n) => {
+      n.fx = null;
+      n.fy = null;
+    });
+    localStorage.removeItem(STORAGE_KEY);
+    fittedOnce = false;
+    simulation.alpha(1).restart();
+    resetHighlight(true);
+  });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") resetHighlight(true);
   });
-
-  // Не сбрасывать по клику на пустой фон без modifier — только через Reset/Esc
-  setTimeout(() => fitToScreen(false), 800);
+  window.addEventListener("resize", () => fitToScreen(false));
 }
 
 drawMap();

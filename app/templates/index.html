@@ -30,9 +30,10 @@
         <div class="chip"><span class="dot mute"></span>Всего <b>{{ total_running + total_stopped }}</b></div>
         <div class="chip"><span class="dot ok"></span>Running <b>{{ total_running }}</b></div>
         <div class="chip"><span class="dot warn"></span>Stopped <b>{{ total_stopped }}</b></div>
-        {% for color, meaning in color_legend.items() %}
-        <div class="chip"><span class="dot {% if color == 'green' %}ok{% elif color == 'yellow' %}warn{% elif color == 'red' %}danger{% else %}info{% endif %}"></span>{{ meaning }}</div>
-        {% endfor %}
+        <div class="chip" title="{{ color_legend['green'] }}"><span class="dot ok"></span>хост OK</div>
+        <div class="chip" title="{{ color_legend['yellow'] }}"><span class="dot warn"></span>без running</div>
+        <div class="chip" title="{{ color_legend['red'] }}"><span class="dot danger"></span>хост down</div>
+        <div class="chip" title="{{ color_legend['blue'] }}"><span class="dot info"></span>пусто</div>
       </div>
 
       <div class="toolbar">
@@ -73,7 +74,7 @@
                 <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="running">
                   <td>{{ c.name }}</td>
                   <td><span class="badge" style="color:var(--ok)">running</span></td>
-                  <td>{{ c.host_port }} → {{ c.container_port }}</td>
+                  <td>{% if c.host_port != 'N/A' %}{{ c.host_port }}→{{ c.container_port }}{% elif c.container_port != 'N/A' %}:{{ c.container_port }}{% else %}—{% endif %}</td>
                   <td>{{ c.uptime }}</td>
                   <td>{{ c.image }}</td>
                   <td>{% if c.project %}<span class="badge project">{{ c.project }}</span>{% else %}—{% endif %}</td>
@@ -94,7 +95,7 @@
                 <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="stopped">
                   <td>{{ c.name }}</td>
                   <td><span class="badge" style="color:var(--warn)">stopped</span></td>
-                  <td>{{ c.host_port }} → {{ c.container_port }}</td>
+                  <td>{% if c.host_port != 'N/A' %}{{ c.host_port }}→{{ c.container_port }}{% elif c.container_port != 'N/A' %}:{{ c.container_port }}{% else %}—{% endif %}</td>
                   <td>{{ c.uptime }}</td>
                   <td>{{ c.image }}</td>
                   <td>{% if c.project %}<span class="badge project">{{ c.project }}</span>{% else %}—{% endif %}</td>
