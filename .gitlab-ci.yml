@@ -3,7 +3,7 @@ stages:
   - deploy
 
 variables:
-  APP_DIR: /data/service/cmap
+  APP_DIR: /data/config/cmap
   FLASK_ENV: development
   SQLALCHEMY_DATABASE_URI: sqlite:///hosts.db
 
@@ -16,7 +16,7 @@ sync:
     - rsync -avz --delete ./ $APP_DIR/
     - echo "Application files synchronized."
   tags:
-    - jump
+    - main
 
 deploy:
   stage: deploy
@@ -31,4 +31,4 @@ deploy:
     - docker logs cmap
 
   tags:
-    - jump
+    - main
