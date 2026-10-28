@@ -6,6 +6,7 @@ variables:
   APP_DIR: /data/config/cmap
   FLASK_ENV: development
   SQLALCHEMY_DATABASE_URI: sqlite:///hosts.db
+  GIT_DEPTH: 0
 
 sync:
   stage: sync
