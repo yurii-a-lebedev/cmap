@@ -10,25 +10,19 @@ variables:
 sync:
   stage: sync
   script:
-    - echo "Cleaning up files in target directory..."
-    - sudo find $APP_DIR -mindepth 1 -exec rm -rf {} +
-    - echo "Synchronizing application files..."
-    - rsync -avz --delete ./ $APP_DIR/
-    - echo "Application files synchronized."
+    - mkdir -p $APP_DIR
+    - rsync -avz --delete --exclude '.git/' --exclude '.env' --exclude 'instance/' ./ $APP_DIR/
   tags:
     - main
 
 deploy:
   stage: deploy
   script:
-    - echo "Deploying the application..."
     - cd $APP_DIR
-    - docker-compose down -v
+    - docker compose down --remove-orphans
     - rm -rf app/__pycache__
-    - docker-compose build --no-cache
-    - docker-compose up -d
+    - docker compose up -d --build
     - sleep 3
     - docker logs cmap
-
   tags:
     - main
