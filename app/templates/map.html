@@ -9,7 +9,10 @@
 </head>
 <body class="map-app">
   <header class="topbar">
-    <div class="brand">CMAP <span>container map</span></div>
+    <div class="brand">
+      <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
+      CMAP <span>container map</span>
+    </div>
     <nav class="nav">
       <a href="/">Контейнеры</a>
       <a class="active" href="/map">Карта</a>

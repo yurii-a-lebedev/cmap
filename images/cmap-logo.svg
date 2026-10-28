@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="CMAP whale">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="62%" r="42%">
+      <stop offset="0%" stop-color="#3aa0ff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#3aa0ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="250" cy="330" rx="150" ry="36" fill="url(#glow)"/>
+
+  <!-- mesh edges -->
+  <g stroke="#16324f" stroke-width="2.2" stroke-linecap="round" opacity="0.92">
+    <path d="M118 248 C150 190 210 158 286 168 C340 176 380 210 402 248 C418 278 410 312 372 328 C330 348 270 352 214 340 C168 330 132 300 118 248 Z"/>
+    <path d="M150 236 L190 210 L240 198 L292 204 L336 224 L368 252"/>
+    <path d="M138 268 L186 254 L238 248 L290 254 L334 272 L360 298"/>
+    <path d="M170 300 L220 292 L274 290 L322 302"/>
+    <path d="M190 210 L186 254 L170 300"/>
+    <path d="M240 198 L238 248 L220 292"/>
+    <path d="M292 204 L290 254 L274 290"/>
+    <path d="M336 224 L334 272 L322 302"/>
+    <path d="M368 252 L360 298"/>
+    <!-- jaw pleats -->
+    <path d="M132 278 L210 292"/>
+    <path d="M128 288 L206 300"/>
+    <path d="M126 298 L200 308"/>
+    <!-- spout -->
+    <path d="M268 168 L268 128"/>
+    <path d="M282 170 L290 126"/>
+    <path d="M254 170 L246 130"/>
+    <!-- tail -->
+    <path d="M402 248 C430 230 458 214 478 206"/>
+    <path d="M402 248 C428 268 452 292 470 312"/>
+    <path d="M430 236 L448 250 L432 268"/>
+  </g>
+
+  <!-- nodes -->
+  <g fill="#2f7fd6">
+    <circle cx="118" cy="248" r="5.5" fill="#1e5fa8"/>
+    <circle cx="150" cy="236" r="4.5"/>
+    <circle cx="190" cy="210" r="5" fill="#3aa0ff"/>
+    <circle cx="240" cy="198" r="5.5" fill="#5bb7ff"/>
+    <circle cx="292" cy="204" r="5" fill="#3aa0ff"/>
+    <circle cx="336" cy="224" r="4.5"/>
+    <circle cx="368" cy="252" r="5" fill="#2f7fd6"/>
+    <circle cx="402" cy="248" r="6" fill="#1e5fa8"/>
+    <circle cx="138" cy="268" r="4"/>
+    <circle cx="186" cy="254" r="4.5" fill="#5bb7ff"/>
+    <circle cx="238" cy="248" r="5" fill="#fff"/>
+    <circle cx="290" cy="254" r="4.5" fill="#3aa0ff"/>
+    <circle cx="334" cy="272" r="4"/>
+    <circle cx="360" cy="298" r="4.5"/>
+    <circle cx="170" cy="300" r="4"/>
+    <circle cx="220" cy="292" r="4.5" fill="#3aa0ff"/>
+    <circle cx="274" cy="290" r="4"/>
+    <circle cx="322" cy="302" r="4"/>
+    <circle cx="214" cy="340" r="4.5" fill="#1e5fa8"/>
+    <circle cx="372" cy="328" r="4.5"/>
+    <circle cx="268" cy="128" r="5" fill="#5bb7ff"/>
+    <circle cx="290" cy="126" r="4.5" fill="#3aa0ff"/>
+    <circle cx="246" cy="130" r="4.5" fill="#2f7fd6"/>
+    <circle cx="478" cy="206" r="5" fill="#5bb7ff"/>
+    <circle cx="470" cy="312" r="5" fill="#3aa0ff"/>
+    <circle cx="448" cy="250" r="4" fill="#fff"/>
+    <!-- trailing dots -->
+    <circle cx="488" cy="228" r="3" fill="#7ec4ff" opacity="0.85"/>
+    <circle cx="498" cy="248" r="2.5" fill="#7ec4ff" opacity="0.7"/>
+    <circle cx="492" cy="278" r="2.2" fill="#7ec4ff" opacity="0.55"/>
+    <circle cx="504" cy="262" r="1.8" fill="#7ec4ff" opacity="0.45"/>
+  </g>
+</svg>
