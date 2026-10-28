@@ -440,6 +440,8 @@ async function drawMap() {
       if (matches.length === 1) {
         focusNode(matches[0]);
         showDrawer(matches[0]);
+      } else if (matches.length > 1) {
+        fitToNodes(matches, true);
       }
     } else {
       node
@@ -447,6 +449,24 @@ async function drawMap() {
         .attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"))
         .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5));
     }
+  }
+
+  function fitToNodes(subset, animate = true) {
+    const xs = subset.map((n) => n.x).filter(Number.isFinite);
+    const ys = subset.map((n) => n.y).filter(Number.isFinite);
+    if (!xs.length) return;
+    const minX = Math.min(...xs) - 60;
+    const maxX = Math.max(...xs) + 60;
+    const minY = Math.min(...ys) - 60;
+    const maxY = Math.max(...ys) + 60;
+    const bw = Math.max(maxX - minX, 80);
+    const bh = Math.max(maxY - minY, 80);
+    const scale = Math.min((width - 80) / bw, (height - 80) / bh, 2.5) * 0.85;
+    const tx = width / 2 - (scale * (minX + maxX)) / 2;
+    const ty = height / 2 - (scale * (minY + maxY)) / 2;
+    const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    const sel = animate ? svg.transition().duration(350) : svg;
+    sel.call(zoomBehavior.transform, t);
   }
 
   function drag(sim) {
