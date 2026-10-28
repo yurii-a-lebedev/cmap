@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   cmap:
     build:
@@ -17,12 +15,13 @@ services:
       - traefik.http.middlewares.cmap_https.redirectscheme.scheme=https
       - traefik.http.routers.cmap.entrypoints=web
       - traefik.http.routers.cmap.middlewares=cmap_https@docker
-      - traefik.http.routers.cmap.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.cmap.rule=Host(`cmap.main.tx0.ru`)
       - traefik.http.routers.cmap_https.entrypoints=websecure
-      - traefik.http.routers.cmap_https.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.cmap_https.rule=Host(`cmap.main.tx0.ru`)
       - traefik.http.routers.cmap_https.tls=true
       - traefik.http.routers.cmap_https.tls.certresolver=le
       - traefik.http.services.cmap.loadbalancer.server.port=5000
+      - connect_to=traefik:443
     restart: always
 
 networks:
