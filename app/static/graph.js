@@ -203,14 +203,14 @@ async function drawMap() {
         .attr("width", 36)
         .attr("height", 20)
         .attr("rx", 6)
-        .attr("fill", "#161c26")
-        .attr("stroke", portColors[parseInt(d.target_port, 10)] || "#666");
+        .attr("fill", "#ffffff")
+        .attr("stroke", portColors[parseInt(d.target_port, 10)] || "#9aa6b5");
       d3.select(this)
         .append("text")
         .attr("text-anchor", "middle")
         .attr("dy", "0.35em")
         .style("font-size", "11px")
-        .style("fill", "#e7edf6")
+        .style("fill", "#1c2430")
         .text(d.target_port);
     });
 
@@ -226,7 +226,7 @@ async function drawMap() {
     .attr("orient", "auto")
     .append("path")
     .attr("d", "M0,-5L10,0L0,5")
-    .attr("fill", "#8b97a8");
+    .attr("fill", "#9aa6b5");
   link.attr("marker-end", "url(#arrow)");
 
   const node = g
@@ -255,21 +255,21 @@ async function drawMap() {
     .attr("class", "node-circle")
     .attr("r", (d) => (d.state === "external" ? 18 : 22))
     .attr("fill", nodeColor)
-    .attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"))
-    .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5))
+    .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
+    .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25))
     .attr("stroke-dasharray", (d) => (d.state === "external" ? "4 3" : null));
 
   const label = node.append("g").attr("class", "node-label").attr("transform", "translate(0,34)");
   label
     .append("rect")
-    .attr("rx", 6)
-    .attr("fill", "rgba(14,18,24,0.88)")
-    .attr("stroke", "#2a3444");
+    .attr("rx", 7)
+    .attr("fill", "rgba(255,255,255,0.92)")
+    .attr("stroke", "#dde3ec");
   label
     .append("text")
     .attr("text-anchor", "middle")
     .attr("dy", "0.35em")
-    .style("fill", "#e7edf6")
+    .style("fill", "#1c2430")
     .style("font-size", "12px")
     .style("font-weight", "600")
     .text((d) => truncate(d.name, 20));
@@ -315,8 +315,8 @@ async function drawMap() {
     if (d.state === "running") return "#5ecf8a";
     if (d.state === "created") return "#e6a23c";
     if (d.state === "exited" || d.state === "stopped" || d.state === "dead") return "#667384";
-    if (d.state === "external") return "#1c2a44";
-    return "#3a4556";
+    if (d.state === "external") return "#dbe7ff";
+    return "#c5ced9";
   }
 
   function truncate(s, n) {
@@ -486,9 +486,9 @@ async function drawMap() {
       node
         .selectAll("circle")
         .attr("stroke", (d) =>
-          matches.includes(d) ? "#ff5a5a" : d.state === "external" ? "#6aa8ff" : "#2a3444"
+          matches.includes(d) ? "#c94444" : d.state === "external" ? "#2f6fed" : "#c8d0dc"
         )
-        .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2.5 : 1.5));
+        .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2 : 1.25));
       if (matches.length === 1) {
         focusNode(matches[0]);
         showDrawer(matches[0]);
@@ -498,8 +498,8 @@ async function drawMap() {
     } else {
       node
         .selectAll("circle")
-        .attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"))
-        .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5));
+        .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
+        .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
     }
   }
 
