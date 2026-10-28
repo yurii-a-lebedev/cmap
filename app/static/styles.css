@@ -377,7 +377,15 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   gap: 12px;
   margin-bottom: 8px;
 }
-.map-panel-head h3 { margin: 0; }
+.map-panel-head h3,
+.map-panel-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
 .map-panel-close {
   padding: 6px 10px;
   min-width: 36px;
@@ -513,10 +521,27 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   .page-head { margin-bottom: 18px; gap: 12px; }
   .page-head h1 { font-size: 1.55rem; }
   .page-head p { font-size: 0.92rem; }
-  .topbar { padding: 10px 12px; gap: 10px; flex-wrap: wrap; }
+  .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .brand { flex: 0 0 auto; min-width: 0; }
   .brand span { display: none; }
-  .nav { gap: 2px; padding: 3px; }
-  .nav a { padding: 7px 10px; font-size: 0.82rem; }
+  .topbar-actions {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+  }
+  .nav {
+    gap: 2px;
+    padding: 3px;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .nav a { padding: 7px 10px; font-size: 0.82rem; white-space: nowrap; }
   .chip-row { gap: 8px; margin-bottom: 16px; }
   .chip { padding: 6px 10px; font-size: 0.8rem; }
   .toolbar { gap: 8px; margin-bottom: 16px; }
