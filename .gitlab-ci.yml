@@ -12,7 +12,8 @@ sync:
   stage: sync
   script:
     - mkdir -p $APP_DIR
-    - rsync -avz --delete --exclude '.git/' --exclude '.env' --exclude 'instance/' ./ $APP_DIR/
+    - rm -rf $APP_DIR/app/__pycache__ || true
+    - rsync -avz --delete --exclude '.git/' --exclude '.env' --exclude 'instance/' --exclude '__pycache__/' ./ $APP_DIR/
   tags:
     - main
 
