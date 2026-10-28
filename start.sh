@@ -1,6 +1,6 @@
-docker-compose down -v
-rm -rf app/__pycache__
-docker-compose build --no-cache
-docker-compose up -d
+#!/bin/sh
+set -e
+cd "$(dirname "$0")"
+docker compose up -d --build
 sleep 3
-docker logs cmap 
+docker logs cmap --tail 50

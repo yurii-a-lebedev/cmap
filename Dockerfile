@@ -1,24 +1,14 @@
-# Используем базовый образ Python
-FROM python:3.10-slim
+FROM python:3.12-slim
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
-
-# Настраиваем PYTHONPATH для корректного импорта
 ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV FLASK_APP=app.main:app
 
-# Копируем файл зависимостей
-COPY app/requirements.txt /app/requirements.txt
+COPY app/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+COPY app /app/app
 
-# Копируем все файлы приложения
-COPY app /app
-
-# Устанавливаем переменную окружения для Flask
-ENV FLASK_APP=main.py
-
-# Определяем команду для запуска приложения
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app.main:app"]
-
+EXPOSE 5000
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "app.main:app"]

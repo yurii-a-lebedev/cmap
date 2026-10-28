@@ -6,10 +6,11 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 import socket
 
+from app.config import Config
+
 # Инициализация приложения Flask
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hosts.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config.from_object(Config)
 
 # Инициализация SQLAlchemy
 db = SQLAlchemy(app)

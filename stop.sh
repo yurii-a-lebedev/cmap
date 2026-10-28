@@ -1,2 +1,4 @@
-docker-compose down
-rm -rf app/__pycache__
+#!/bin/sh
+set -e
+cd "$(dirname "$0")"
+docker compose down --remove-orphans
