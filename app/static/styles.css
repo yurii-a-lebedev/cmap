@@ -353,6 +353,29 @@ tr:hover td { background: rgba(61, 214, 198, 0.04); }
 .drawer-kv dt { color: var(--muted); font-size: 0.75rem; margin-bottom: 4px; }
 .drawer-kv dd { margin: 0; font-family: var(--mono); font-size: 0.84rem; word-break: break-all; }
 
+.project-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.project-chip {
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.project-chip:hover { color: var(--text); border-color: var(--accent-dim); }
+.project-chip.active {
+  color: #062824;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 .node-circle { transition: opacity 0.15s ease; }
 .link-line { transition: opacity 0.15s ease; }
 

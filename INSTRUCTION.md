@@ -9,7 +9,13 @@
 | БД хостов | `/data/config/cmap/instance/hosts.db` |
 | Репозиторий | `https://gitlab.main.tx0.ru/lebedev/cmap` |
 
-Связи на карте задаются лейблом контейнера: `connect_to=service:port` (несколько через запятую).
+Связи на карте: лейбл `connect_to=service:port` (несколько через запятую).
+
+## UI
+
+- **Контейнеры** — список, поиск, фильтр running/stopped
+- **Карта** — по умолчанию только узлы со связями, кластер по compose `project`, чипы проектов, Fit/zoom, сайдбар узла
+- **Хосты** — `localhost` через docker.sock, удаление localhost запрещено
 
 ## Запуск
 
@@ -20,7 +26,7 @@ docker compose ps
 docker logs cmap --tail 50
 ```
 
-Проверка:
+Проверка (из сети allowlist):
 
 ```bash
 curl -sk -o /dev/null -w "%{http_code}\n" \
@@ -28,14 +34,13 @@ curl -sk -o /dev/null -w "%{http_code}\n" \
   https://cmap.main.tx0.ru/
 ```
 
-Ожидается `200` из сети allowlist. Снаружи — отказ Traefik.
-
 ## Деплой
 
-CI (тег раннера `main`): sync в `/data/config/cmap`, затем `docker compose up -d --build`.  
-`.env` и `instance/` sync не трогает.
+CI (тег раннера `main`): sync → `/data/config/cmap`, затем `docker compose up -d --build`.  
+`.env` и `instance/` sync не трогает. Права каталога: `gitlab-runner`.
 
-## Хосты Docker
+## Безопасность
 
-Локальный хост в UI: `localhost` (через `/var/run/docker.sock`, read-only).  
-Удалённые Docker API по голому HTTP не рекомендуются — только при необходимости и в доверенной сети.
+- Traefik middleware `internal-allowlist@file`
+- docker.sock смонтирован **read-only**
+- Снаружи LAN без VPN ответа не будет (это ожидаемо)

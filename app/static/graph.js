@@ -90,7 +90,8 @@ async function drawMap() {
   let zoomBehavior;
   let fittedOnce = false;
 
-  const STORAGE_KEY = "cmap-node-positions-v2";
+  const STORAGE_KEY = "cmap-node-positions-v3";
+  let activeProject = "";
   const saved = (() => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -99,15 +100,34 @@ async function drawMap() {
     }
   })();
 
-  // Стартовые координаты без фиксации — иначе Fit обязателен вручную
+  const projectNames = [
+    ...new Set(nodes.map((n) => n.project).filter(Boolean)),
+  ].sort();
+  const projectCenters = {};
+  projectNames.forEach((p, i) => {
+    const angle = (i / Math.max(projectNames.length, 1)) * Math.PI * 2;
+    projectCenters[p] = {
+      x: width / 2 + Math.cos(angle) * Math.min(width, height) * 0.32,
+      y: height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28,
+    };
+  });
+  projectCenters._none = { x: width / 2, y: height / 2 };
+  projectCenters.external = {
+    x: width / 2,
+    y: height * 0.12,
+  };
+
+  // Стартовые координаты без жёсткой фиксации
   nodes.forEach((n, i) => {
     if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
       n.x = saved[n.id].x;
       n.y = saved[n.id].y;
     } else {
+      const key = n.state === "external" ? "external" : n.project || "_none";
+      const c = projectCenters[key] || projectCenters._none;
       const angle = (i / nodes.length) * Math.PI * 2;
-      n.x = width / 2 + Math.cos(angle) * 180;
-      n.y = height / 2 + Math.sin(angle) * 180;
+      n.x = c.x + Math.cos(angle) * 40;
+      n.y = c.y + Math.sin(angle) * 40;
     }
   });
 
@@ -122,6 +142,10 @@ async function drawMap() {
     });
   svg.call(zoomBehavior);
 
+  function clusterStrength() {
+    return document.getElementById("flt-cluster").checked ? 0.45 : 0.03;
+  }
+
   const simulation = d3
     .forceSimulation(nodes)
     .force(
@@ -129,15 +153,31 @@ async function drawMap() {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(150)
+        .distance(140)
         .strength(0.55)
     )
-    .force("charge", d3.forceManyBody().strength(-480))
-    .force("collide", d3.forceCollide().radius(46))
+    .force("charge", d3.forceManyBody().strength(-420))
+    .force("collide", d3.forceCollide().radius(48))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("x", d3.forceX(width / 2).strength(0.04))
-    .force("y", d3.forceY(height / 2).strength(0.04))
-    .alphaDecay(0.03);
+    .force(
+      "x",
+      d3
+        .forceX((d) => {
+          const key = d.state === "external" ? "external" : d.project || "_none";
+          return (projectCenters[key] || projectCenters._none).x;
+        })
+        .strength(clusterStrength)
+    )
+    .force(
+      "y",
+      d3
+        .forceY((d) => {
+          const key = d.state === "external" ? "external" : d.project || "_none";
+          return (projectCenters[key] || projectCenters._none).y;
+        })
+        .strength(clusterStrength)
+    )
+    .alphaDecay(0.028);
 
   const link = g
     .append("g")
@@ -292,8 +332,13 @@ async function drawMap() {
   }
 
   function fitToScreen(animate = true) {
-    const xs = nodes.map((n) => n.x).filter(Number.isFinite);
-    const ys = nodes.map((n) => n.y).filter(Number.isFinite);
+    const shown = nodes.filter((n) => {
+      const el = node.filter((d) => d.id === n.id).node();
+      return el && el.style.display !== "none";
+    });
+    const pool = shown.length ? shown : nodes;
+    const xs = pool.map((n) => n.x).filter(Number.isFinite);
+    const ys = pool.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
     const minX = Math.min(...xs) - 40;
     const maxX = Math.max(...xs) + 40;
@@ -401,7 +446,7 @@ async function drawMap() {
     const showRunning = document.getElementById("flt-running").checked;
     const showStopped = document.getElementById("flt-stopped").checked;
     const showExternal = document.getElementById("flt-external").checked;
-    const onlyOrphan = document.getElementById("flt-orphan").checked;
+    const linkedOnly = document.getElementById("flt-linked-only").checked;
     const prefix = document.getElementById("flt-prefix").value.trim().toLowerCase();
 
     const visible = new Set();
@@ -413,7 +458,8 @@ async function drawMap() {
       if (isExt && !showExternal) ok = false;
       if (isRun && !showRunning) ok = false;
       if (isStop && !showStopped) ok = false;
-      if (onlyOrphan && linkedIds.has(d.id)) ok = false;
+      if (linkedOnly && !linkedIds.has(d.id)) ok = false;
+      if (activeProject && d.project !== activeProject && d.state !== "external") ok = false;
       if (
         prefix &&
         !(d.name || "").toLowerCase().includes(prefix) &&
@@ -429,8 +475,14 @@ async function drawMap() {
       visible.has(d.source.id) && visible.has(d.target.id) ? null : "none"
     );
 
+    const visibleNodes = nodes.filter((d) => visible.has(d.id));
+    const stats = document.getElementById("map-stats");
+    if (stats) {
+      stats.textContent = `На карте: ${visibleNodes.length} узлов · ${links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length} связей`;
+    }
+
     if (q) {
-      const matches = nodes.filter((d) => visible.has(d.id) && d.name.toLowerCase().includes(q));
+      const matches = visibleNodes.filter((d) => d.name.toLowerCase().includes(q));
       node
         .selectAll("circle")
         .attr("stroke", (d) =>
@@ -449,6 +501,13 @@ async function drawMap() {
         .attr("stroke", (d) => (d.state === "external" ? "#6aa8ff" : "#2a3444"))
         .attr("stroke-width", (d) => (d.state === "external" ? 2.5 : 1.5));
     }
+  }
+
+  function updateClusterForce() {
+    simulation.force("x").strength(clusterStrength);
+    simulation.force("y").strength(clusterStrength);
+    fittedOnce = false;
+    simulation.alpha(0.8).restart();
   }
 
   function fitToNodes(subset, animate = true) {
@@ -489,11 +548,42 @@ async function drawMap() {
       });
   }
 
+  const chips = document.getElementById("project-chips");
+  function setProjectFilter(project) {
+    activeProject = project;
+    [...chips.querySelectorAll(".project-chip")].forEach((el) => {
+      const isAll = el.textContent === "все";
+      el.classList.toggle("active", isAll ? !project : el.textContent === project);
+    });
+    applyFilters();
+    fittedOnce = false;
+    simulation.alpha(0.7).restart();
+  }
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "project-chip active";
+  allChip.textContent = "все";
+  allChip.onclick = () => setProjectFilter("");
+  chips.appendChild(allChip);
+  projectNames.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "project-chip";
+    btn.textContent = p;
+    btn.onclick = () => setProjectFilter(p);
+    chips.appendChild(btn);
+  });
+
   document.getElementById("search-box").addEventListener("input", applyFilters);
   document.getElementById("flt-running").addEventListener("change", applyFilters);
   document.getElementById("flt-stopped").addEventListener("change", applyFilters);
   document.getElementById("flt-external").addEventListener("change", applyFilters);
-  document.getElementById("flt-orphan").addEventListener("change", applyFilters);
+  document.getElementById("flt-linked-only").addEventListener("change", () => {
+    applyFilters();
+    fittedOnce = false;
+    fitToScreen(true);
+  });
+  document.getElementById("flt-cluster").addEventListener("change", updateClusterForce);
   document.getElementById("flt-prefix").addEventListener("input", applyFilters);
   document.getElementById("btn-fit").addEventListener("click", () => fitToScreen(true));
   document.getElementById("btn-zoom-in").addEventListener("click", () => {
@@ -516,6 +606,8 @@ async function drawMap() {
     if (e.key === "Escape") resetHighlight(true);
   });
   window.addEventListener("resize", () => fitToScreen(false));
+
+  applyFilters();
 }
 
 drawMap();

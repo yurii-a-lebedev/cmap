@@ -67,8 +67,8 @@ connect_to=db-service:80,external-service:8080
 #### Для выгрузки приложения через gitlab-runner: 
   - Для деплоя на виртуальной машине не забываем править права 
     ```bash
-    sudo chown -R gitlab-runner:gitlab-runner /data/service/cmap
-    sudo chmod -R 755 /data/service/cmap
+    sudo chown -R gitlab-runner:gitlab-runner /data/config/cmap
+    sudo chmod -R 755 /data/config/cmap
     ```
 Настроить sudo без пароля для пользователя Runner
 
