@@ -108,12 +108,15 @@ if ENABLE_ROUTES.get("index"):
             if isinstance(containers, list):
                 for container in containers:
                     ports = container.get('Ports', [])
+                    labels = container.get('Labels', {}) or {}
                     container_data = {
                         "name": container['Names'][0].strip('/'),
                         "host_port": ports[0].get('PublicPort', "N/A") if ports else "N/A",
                         "container_port": ports[0].get('PrivatePort', "N/A") if ports else "N/A",
                         "uptime": container['Status'],
-                        "image": container['Image']
+                        "image": container['Image'],
+                        "state": container.get('State', ''),
+                        "project": labels.get('com.docker.compose.project', ''),
                     }
                     if container['State'] == 'running':
                         running_containers.append(container_data)
@@ -167,11 +170,13 @@ if ENABLE_ROUTES.get("hosts"):
         if request.method == "DELETE":
             data = request.json
             host = Host.query.get(data['id'])
-            if host:
-                db.session.delete(host)
-                db.session.commit()
-                return jsonify({"message": "Хост удален"}), 200
-            return jsonify({"message": "Хост не найден"}), 404
+            if not host:
+                return jsonify({"message": "Хост не найден"}), 404
+            if host.host == "localhost":
+                return jsonify({"message": "localhost нельзя удалить"}), 400
+            db.session.delete(host)
+            db.session.commit()
+            return jsonify({"message": "Хост удален"}), 200
 
         if request.method == "PATCH":
             data = request.json
@@ -206,26 +211,39 @@ if ENABLE_ROUTES.get("containers_map"):
                     container_state = container['State']
                     container_labels = container.get('Labels', {})
 
-                    # Добавляем узел контейнера с информацией о хосте
+                    ports = []
+                    for p in container.get('Ports', []) or []:
+                        pub = p.get('PublicPort')
+                        priv = p.get('PrivatePort')
+                        if priv:
+                            ports.append({
+                                "public": pub,
+                                "private": priv,
+                                "type": p.get('Type', 'tcp'),
+                            })
+                    connect_to = (container_labels.get('connect_to') or '').strip()
                     results["nodes"].append({
                         "id": container_id,
                         "name": container_name,
                         "state": container_state,
-                        "host": visible_name,  # Имя хоста
-                        "labels": container_labels
+                        "status": container.get('Status', ''),
+                        "image": container.get('Image', ''),
+                        "host": visible_name,
+                        "project": container_labels.get('com.docker.compose.project', ''),
+                        "connect_to": connect_to,
+                        "ports": ports,
+                        "labels": container_labels,
                     })
                     container_ids[container_name] = container_id
 
-                    # Обработка connect_to с несколькими целями
-                    connect_to = container_labels.get('connect_to', '')
-                    connections = connect_to.split(',')
+                    connections = connect_to.split(',') if connect_to else []
                     for connection in connections:
                         if ':' in connection:
-                            service, port = connection.split(':')
+                            service, tgt_port = connection.split(':', 1)
                             results["links"].append({
                                 "source": container_id,
                                 "target_service": service.strip(),
-                                "target_port": port.strip()  # Добавляем порт в данные связи
+                                "target_port": tgt_port.strip(),
                             })
 
         # Добавляем связи, проверяя существующие узлы

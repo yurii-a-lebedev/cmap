@@ -1,19 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Container Map</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="{{ url_for('static', filename='graph.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMAP — карта</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body class="map-page">
-    <div class="scroll-wrapper">
-        <div class="scroll-container">
-            <svg></svg>
+<body class="map-app">
+  <header class="topbar">
+    <div class="brand">CMAP <span>container map</span></div>
+    <nav class="nav">
+      <a href="/">Контейнеры</a>
+      <a class="active" href="/map">Карта</a>
+      <a href="/manage_hosts">Хосты</a>
+    </nav>
+  </header>
+
+  <div class="map-layout">
+    <aside class="map-side">
+      <div class="block">
+        <h3>Поиск</h3>
+        <input class="input" id="search-box" type="search" list="node-names" placeholder="Имя контейнера…">
+        <datalist id="node-names"></datalist>
+      </div>
+      <div class="block">
+        <h3>Фильтры</h3>
+        <div class="filter-row">
+          <label><input type="checkbox" id="flt-running" checked> Running</label>
+          <label><input type="checkbox" id="flt-stopped" checked> Stopped / другие</label>
+          <label><input type="checkbox" id="flt-external" checked> External</label>
+          <label><input type="checkbox" id="flt-orphan"> Только без связей</label>
         </div>
+        <input class="input" id="flt-prefix" style="margin-top:8px;width:100%" placeholder="Префикс / проект…">
+      </div>
+      <div class="block">
+        <h3>Вид</h3>
+        <div class="zoom-row">
+          <button class="btn" type="button" id="btn-fit" title="Вписать карту">Fit</button>
+          <button class="btn" type="button" id="btn-zoom-in" title="Приблизить">+</button>
+          <button class="btn" type="button" id="btn-zoom-out" title="Отдалить">−</button>
+          <button class="btn" type="button" id="btn-reset" title="Сбросить выделение">Reset</button>
+        </div>
+      </div>
+      <div class="block">
+        <h3>Статусы</h3>
+        <div class="legend-item"><span class="swatch" style="background:#5ecf8a"></span>running</div>
+        <div class="legend-item"><span class="swatch" style="background:#e6a23c"></span>created</div>
+        <div class="legend-item"><span class="swatch" style="background:#667384"></span>stopped</div>
+        <div class="legend-item"><span class="swatch" style="background:#6aa8ff"></span>external</div>
+      </div>
+      <div class="block">
+        <h3>Порты связей</h3>
+        <div id="port-legend"></div>
+      </div>
+    </aside>
+
+    <div class="map-canvas">
+      <svg id="map-svg"></svg>
     </div>
+
+    <aside class="map-drawer" id="drawer">
+      <h3>Узел</h3>
+      <div class="drawer-empty" id="drawer-empty">Кликните контейнер на карте. Esc — сброс выделения.</div>
+      <div class="drawer-kv" id="drawer-body" hidden></div>
+    </aside>
+  </div>
+
+  <script src="{{ url_for('static', filename='graph.js') }}"></script>
 </body>
 </html>
-

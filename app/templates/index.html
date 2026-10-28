@@ -1,137 +1,148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Docker Containers Status</title>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <script>
-        let allExpanded = false;
-
-        function toggleAllSections() {
-            const sections = document.querySelectorAll('.host-details');
-            const toggleIcon = document.getElementById('toggle-icon');
-            allExpanded = !allExpanded;
-
-            sections.forEach(section => {
-                if (allExpanded) {
-                    section.classList.remove('hidden');
-                } else {
-                    section.classList.add('hidden');
-                }
-            });
-
-            toggleIcon.textContent = allExpanded ? 'expand_less' : 'expand_more';
-        }
-
-        function toggleSection(host) {
-            const section = document.getElementById(`section-${host}`);
-            const button = document.getElementById(`button-${host}`);
-            if (section.classList.contains('hidden')) {
-                section.classList.remove('hidden');
-                button.textContent = '-';
-            } else {
-                section.classList.add('hidden');
-                button.textContent = '+';
-            }
-        }
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMAP — контейнеры</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Docker Containers Status</h1>
-    <div class="button-row">
-        <button id="toggle-all-button" class="button-icon" onclick="toggleAllSections()" title="Развернуть/Свернуть все">
-            <i id="toggle-icon" class="material-icons">expand_more</i>
-        </button>
-        <div class="side-buttons">
-            <a href="/map" class="button-icon" title="Карта контейнеров">
-                <i class="material-icons">map</i>
-            </a>
-            <a href="/manage_hosts" class="button-icon" title="Управление хостами">
-                <i class="material-icons">settings</i>
-            </a>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">CMAP <span>container map</span></div>
+      <nav class="nav">
+        <a class="active" href="/">Контейнеры</a>
+        <a href="/map">Карта</a>
+        <a href="/manage_hosts">Хосты</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <div class="page-head">
+        <div>
+          <h1>Контейнеры</h1>
+          <p>Статус Docker-хостов и список контейнеров</p>
         </div>
-    </div>
-    {% for host, data in results.items() %}
-        <div class="host-section">
-            <h2 class="{{ data.color }}" onclick="toggleSection('{{ host }}')">
-                <span id="button-{{ host }}" class="toggle-button">+</span>
-                Хост: {{ host }}
-            </h2>
-            <div id="section-{{ host }}" class="host-details hidden">
-                {% if data.error %}
-                    <p style="padding: 15px;">{{ data.error }}</p>
-                {% else %}
-                    <h3 style="padding: 15px;">Запущенные контейнеры</h3>
-                    {% if data.running %}
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Имя контейнера</th>
-                                <th>Порт хоста</th>
-                                <th>Порт контейнера</th>
-                                <th>Аптайм</th>
-                                <th>Образ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for container in data.running %}
-                                <tr>
-                                    <td>{{ container.name }}</td>
-                                    <td>{{ container.host_port }}</td>
-                                    <td>{{ container.container_port }}</td>
-                                    <td>{{ container.uptime }}</td>
-                                    <td>{{ container.image }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                        <p>Нет запущенных контейнеров</p>
-                    {% endif %}
-                    <h3>Остановленные контейнеры</h3>
-                    {% if data.stopped %}
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Имя контейнера</th>
-                                <th>Порт хоста</th>
-                                <th>Порт контейнера</th>
-                                <th>Аптайм</th>
-                                <th>Образ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for container in data.stopped %}
-                                <tr>
-                                    <td>{{ container.name }}</td>
-                                    <td>{{ container.host_port }}</td>
-                                    <td>{{ container.container_port }}</td>
-                                    <td>{{ container.uptime }}</td>
-                                    <td>{{ container.image }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                        <p>Нет остановленных контейнеров</p>
-                    {% endif %}
-                {% endif %}
-            </div>
-        </div>
-    {% endfor %}
-    <div class="summary">
-        <p>Итого: {{ total_running + total_stopped }} | Запущенных контейнеров: {{ total_running }} | Остановленных контейнеров: {{ total_stopped }}</p>
-    </div>
-    <div class="legend">
-        <h3>Легенда:</h3>
+        <button class="btn" type="button" onclick="location.reload()" title="Обновить">Обновить</button>
+      </div>
+
+      <div class="chip-row" id="summary-chips">
+        <div class="chip"><span class="dot mute"></span>Всего <b>{{ total_running + total_stopped }}</b></div>
+        <div class="chip"><span class="dot ok"></span>Running <b>{{ total_running }}</b></div>
+        <div class="chip"><span class="dot warn"></span>Stopped <b>{{ total_stopped }}</b></div>
         {% for color, meaning in color_legend.items() %}
-            <div>
-                <span class="{{ color }}"></span>{{ meaning }}
-            </div>
+        <div class="chip"><span class="dot {% if color == 'green' %}ok{% elif color == 'yellow' %}warn{% elif color == 'red' %}danger{% else %}info{% endif %}"></span>{{ meaning }}</div>
         {% endfor %}
-    </div>
+      </div>
+
+      <div class="toolbar">
+        <input class="input" id="filter-q" type="search" placeholder="Поиск по имени или образу…">
+        <select class="input" id="filter-state">
+          <option value="all">Все состояния</option>
+          <option value="running">Только running</option>
+          <option value="stopped">Только stopped</option>
+        </select>
+        <button class="btn" type="button" id="expand-all">Развернуть / свернуть</button>
+      </div>
+
+      {% set host_count = results|length %}
+      {% for host, data in results.items() %}
+      <section class="card host-card" data-host="{{ host }}">
+        <div class="card-head {% if data.color == 'green' %}ok{% elif data.color == 'yellow' %}warn{% elif data.color == 'red' %}danger{% else %}info{% endif %}" data-toggle>
+          <h2>
+            <span class="toggle-mark">{{ '−' if host_count == 1 else '+' }}</span>
+            {{ host }}
+          </h2>
+          <span class="badge">
+            {% if data.error %}ошибка{% else %}{{ data.running|length }} run / {{ data.stopped|length }} stop{% endif %}
+          </span>
+        </div>
+        <div class="card-body {% if host_count != 1 %}hidden{% endif %}">
+          {% if data.error %}
+          <p>{{ data.error }}</p>
+          {% else %}
+          <div class="table-wrap" style="margin-bottom:12px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th><th>Состояние</th><th>Порты</th><th>Статус</th><th>Образ</th><th>Проект</th>
+                </tr>
+              </thead>
+              <tbody class="rows-running">
+                {% for c in data.running %}
+                <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="running">
+                  <td>{{ c.name }}</td>
+                  <td><span class="badge" style="color:var(--ok)">running</span></td>
+                  <td>{{ c.host_port }} → {{ c.container_port }}</td>
+                  <td>{{ c.uptime }}</td>
+                  <td>{{ c.image }}</td>
+                  <td>{% if c.project %}<span class="badge project">{{ c.project }}</span>{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th><th>Состояние</th><th>Порты</th><th>Статус</th><th>Образ</th><th>Проект</th>
+                </tr>
+              </thead>
+              <tbody class="rows-stopped">
+                {% for c in data.stopped %}
+                <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="stopped">
+                  <td>{{ c.name }}</td>
+                  <td><span class="badge" style="color:var(--warn)">stopped</span></td>
+                  <td>{{ c.host_port }} → {{ c.container_port }}</td>
+                  <td>{{ c.uptime }}</td>
+                  <td>{{ c.image }}</td>
+                  <td>{% if c.project %}<span class="badge project">{{ c.project }}</span>{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </section>
+      {% endfor %}
+    </main>
+  </div>
+  <script>
+    const cards = [...document.querySelectorAll('.host-card')];
+    let allOpen = cards.length === 1;
+
+    document.querySelectorAll('[data-toggle]').forEach(head => {
+      head.addEventListener('click', () => {
+        const body = head.parentElement.querySelector('.card-body');
+        const mark = head.querySelector('.toggle-mark');
+        body.classList.toggle('hidden');
+        mark.textContent = body.classList.contains('hidden') ? '+' : '−';
+      });
+    });
+
+    document.getElementById('expand-all').addEventListener('click', () => {
+      allOpen = !allOpen;
+      cards.forEach(card => {
+        const body = card.querySelector('.card-body');
+        const mark = card.querySelector('.toggle-mark');
+        body.classList.toggle('hidden', !allOpen);
+        mark.textContent = allOpen ? '−' : '+';
+      });
+    });
+
+    function applyFilters() {
+      const q = document.getElementById('filter-q').value.trim().toLowerCase();
+      const state = document.getElementById('filter-state').value;
+      document.querySelectorAll('tbody tr[data-name]').forEach(row => {
+        const matchQ = !q || row.dataset.name.includes(q) || row.dataset.image.includes(q);
+        const matchS = state === 'all' || row.dataset.state === state;
+        row.style.display = matchQ && matchS ? '' : 'none';
+      });
+    }
+    document.getElementById('filter-q').addEventListener('input', applyFilters);
+    document.getElementById('filter-state').addEventListener('change', applyFilters);
+  </script>
 </body>
 </html>
-

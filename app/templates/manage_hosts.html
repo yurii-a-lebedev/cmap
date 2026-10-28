@@ -1,149 +1,159 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Hosts</title>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        /* Убираем скролл у полей ввода типа number */
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type=number] {
-            -moz-appearance: textfield; /* Для Firefox */
-        }
-
-    </style>
-    <script>
-        async function fetchHosts() {
-            const response = await fetch("/hosts");
-            let hosts = await response.json();
-
-            // Перемещаем localhost в начало списка
-            hosts = hosts.sort((a, b) => {
-                if (a.host === "localhost") return -1;
-                if (b.host === "localhost") return 1;
-                return 0;
-            });
-
-            const hostList = document.getElementById("host-list");
-            hostList.innerHTML = "";
-            hosts.forEach(host => {
-                const listItem = document.createElement("li");
-                const actions = document.createElement("div");
-                actions.classList.add("host-actions");
-
-                if (host.host === "localhost") {
-                    listItem.textContent = `Host: ${host.host}`;
-
-                    const editNameInput = document.createElement("input");
-                    editNameInput.type = "text";
-                    editNameInput.placeholder = "Edit Name";
-                    editNameInput.value = host.visible_name || "";
-
-                    const saveButton = document.createElement("button");
-                    saveButton.classList.add("button-icon");
-                    saveButton.title = "Сохранить имя";
-                    saveButton.onclick = () => updateHostName(host.id, editNameInput.value);
-
-                    const saveIcon = document.createElement("i");
-                    saveIcon.classList.add("material-icons");
-                    saveIcon.textContent = "save";
-
-                    saveButton.appendChild(saveIcon);
-                    actions.appendChild(editNameInput);
-                    actions.appendChild(saveButton);
-                } else {
-                    listItem.textContent = `Host: ${host.host}, Port: ${host.port}`;
-                }
-
-                const deleteButton = document.createElement("button");
-                deleteButton.classList.add("button-icon");
-                deleteButton.title = "Удалить";
-                deleteButton.onclick = () => deleteHost(host.id);
-
-                const deleteIcon = document.createElement("i");
-                deleteIcon.classList.add("material-icons");
-                deleteIcon.textContent = "delete";
-
-                deleteButton.appendChild(deleteIcon);
-                actions.appendChild(deleteButton);
-
-                listItem.appendChild(actions);
-                hostList.appendChild(listItem);
-            });
-        }
-
-        async function addHost(event) {
-            event.preventDefault();
-            const host = document.getElementById("host").value;
-            const port = document.getElementById("port").value;
-
-            const response = await fetch("/hosts", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ host, port })
-            });
-
-            if (response.ok) {
-                document.getElementById("host-form").reset();
-                fetchHosts();
-            }
-        }
-
-        async function updateHostName(id, name) {
-            const response = await fetch("/hosts", {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ id, visible_name: name })
-            });
-
-            if (response.ok) {
-                fetchHosts();
-            } else {
-                console.error("Failed to update host name", await response.text());
-            }
-        }
-
-        async function deleteHost(id) {
-            const response = await fetch("/hosts", {
-                method: "DELETE",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ id })
-            });
-
-            if (response.ok) {
-                fetchHosts();
-            }
-        }
-
-        document.addEventListener("DOMContentLoaded", fetchHosts);
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMAP — хосты</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Manage Hosts</h1>
-    <div class="button-row">
-        <button class="button-icon" onclick="window.history.back()" title="Назад">
-            <i class="material-icons">arrow_back</i>
-        </button>
-    </div>
-    <form id="host-form" onsubmit="addHost(event)">
-        <label for="host">Host:</label>
-        <input type="text" id="host" required>
-        <label for="port">Port:</label>
-        <input type="number" id="port" value="2375" required>
-        <button type="submit">Добавить хост</button>
-    </form>
-    <ul id="host-list"></ul>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">CMAP <span>container map</span></div>
+      <nav class="nav">
+        <a href="/">Контейнеры</a>
+        <a href="/map">Карта</a>
+        <a class="active" href="/manage_hosts">Хосты</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <div class="page-head">
+        <div>
+          <h1>Хосты Docker</h1>
+          <p>localhost ходит через docker.sock. Удалённые — по Docker API (порт).</p>
+        </div>
+      </div>
+
+      <form class="form-card" id="host-form">
+        <label>Хост
+          <input class="input" id="host" required placeholder="например 192.168.1.10">
+        </label>
+        <label>Порт API
+          <input class="input" id="port" type="number" value="2375" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Добавить хост</button>
+        <div class="toast" id="form-toast"></div>
+      </form>
+
+      <ul class="host-list" id="host-list"></ul>
+      <div class="toast" id="list-toast"></div>
+    </main>
+  </div>
+
+  <script>
+    const formToast = document.getElementById('form-toast');
+    const listToast = document.getElementById('list-toast');
+
+    async function fetchHosts() {
+      listToast.textContent = '';
+      const response = await fetch('/hosts');
+      let hosts = await response.json();
+      hosts = hosts.sort((a, b) => (a.host === 'localhost' ? -1 : b.host === 'localhost' ? 1 : 0));
+      const hostList = document.getElementById('host-list');
+      hostList.innerHTML = '';
+      hosts.forEach(host => {
+        const li = document.createElement('li');
+        li.className = 'host-item';
+        const meta = document.createElement('div');
+        meta.className = 'host-meta';
+        const title = document.createElement('strong');
+        title.textContent = host.visible_name || host.host;
+        const sub = document.createElement('span');
+        sub.textContent = host.host === 'localhost'
+          ? 'localhost · docker.sock'
+          : `${host.host}:${host.port}`;
+        meta.append(title, sub);
+
+        const actions = document.createElement('div');
+        actions.className = 'host-actions';
+
+        const nameInput = document.createElement('input');
+        nameInput.className = 'input';
+        nameInput.placeholder = 'Отображаемое имя';
+        nameInput.value = host.visible_name || '';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn';
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Сохранить имя';
+        saveBtn.onclick = () => updateHostName(host.id, nameInput.value);
+
+        actions.append(nameInput, saveBtn);
+
+        if (host.host !== 'localhost') {
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-danger';
+          delBtn.type = 'button';
+          delBtn.textContent = 'Удалить';
+          delBtn.onclick = () => deleteHost(host.id);
+          actions.append(delBtn);
+        } else {
+          const lock = document.createElement('span');
+          lock.className = 'badge';
+          lock.textContent = 'защищён';
+          actions.append(lock);
+        }
+
+        li.append(meta, actions);
+        hostList.appendChild(li);
+      });
+    }
+
+    async function addHost(event) {
+      event.preventDefault();
+      formToast.textContent = '';
+      const host = document.getElementById('host').value.trim();
+      const port = Number(document.getElementById('port').value);
+      if (!host) {
+        formToast.textContent = 'Укажите хост';
+        return;
+      }
+      const response = await fetch('/hosts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host, port }),
+      });
+      if (!response.ok) {
+        formToast.textContent = 'Не удалось добавить хост';
+        return;
+      }
+      document.getElementById('host-form').reset();
+      document.getElementById('port').value = 2375;
+      fetchHosts();
+    }
+
+    async function updateHostName(id, name) {
+      listToast.textContent = '';
+      const response = await fetch('/hosts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, visible_name: name }),
+      });
+      if (!response.ok) {
+        listToast.textContent = 'Не удалось сохранить имя';
+        return;
+      }
+      fetchHosts();
+    }
+
+    async function deleteHost(id) {
+      listToast.textContent = '';
+      const response = await fetch('/hosts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        listToast.textContent = data.message || 'Не удалось удалить';
+        return;
+      }
+      fetchHosts();
+    }
+
+    document.getElementById('host-form').addEventListener('submit', addHost);
+    document.addEventListener('DOMContentLoaded', fetchHosts);
+  </script>
 </body>
 </html>
