@@ -89,6 +89,7 @@ async function drawMap() {
   const selectedNodes = new Set();
   let zoomBehavior;
   let fittedOnce = false;
+  let layoutReady = false;
 
   const STORAGE_KEY = "cmap-node-positions-v3";
   let activeProject = "";
@@ -153,11 +154,11 @@ async function drawMap() {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(140)
-        .strength(0.55)
+        .distance(150)
+        .strength(0.5)
     )
-    .force("charge", d3.forceManyBody().strength(-420))
-    .force("collide", d3.forceCollide().radius(48))
+    .force("charge", d3.forceManyBody().strength(-380))
+    .force("collide", d3.forceCollide().radius(50).strength(0.8))
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force(
       "x",
@@ -177,7 +178,9 @@ async function drawMap() {
         })
         .strength(clusterStrength)
     )
-    .alphaDecay(0.028);
+    .velocityDecay(0.45)
+    .alphaDecay(0.04)
+    .alphaMin(0.001);
 
   const link = g
     .append("g")
@@ -295,20 +298,30 @@ async function drawMap() {
       (d) => `translate(${(d.source.x + d.target.x) / 2},${(d.source.y + d.target.y) / 2})`
     );
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-
-    if (!fittedOnce && simulation.alpha() < 0.12) {
-      fittedOnce = true;
-      fitToScreen(false);
-      persistPositions();
-    }
   });
 
+  function pinLayout() {
+    nodes.forEach((n) => {
+      n.fx = n.x;
+      n.fy = n.y;
+    });
+    persistPositions();
+  }
+
+  function unpinLayout() {
+    nodes.forEach((n) => {
+      n.fx = null;
+      n.fy = null;
+    });
+  }
+
   simulation.on("end", () => {
+    pinLayout();
+    layoutReady = true;
     if (!fittedOnce) {
       fittedOnce = true;
-      fitToScreen(false);
+      fitToScreen(true);
     }
-    persistPositions();
   });
 
   function nodeColor(d) {
@@ -334,34 +347,19 @@ async function drawMap() {
   function fitToScreen(animate = true) {
     const shown = nodes.filter((n) => {
       const el = node.filter((d) => d.id === n.id).node();
-      return el && el.style.display !== "none";
+      return el && getComputedStyle(el).display !== "none";
     });
     const pool = shown.length ? shown : nodes;
-    const xs = pool.map((n) => n.x).filter(Number.isFinite);
-    const ys = pool.map((n) => n.y).filter(Number.isFinite);
-    if (!xs.length) return;
-    const minX = Math.min(...xs) - 40;
-    const maxX = Math.max(...xs) + 40;
-    const minY = Math.min(...ys) - 40;
-    const maxY = Math.max(...ys) + 40;
-    const bw = Math.max(maxX - minX, 1);
-    const bh = Math.max(maxY - minY, 1);
-    const pad = 56;
-    const scale = Math.min((width - pad) / bw, (height - pad) / bh, 2.2) * 0.92;
-    const tx = width / 2 - (scale * (minX + maxX)) / 2;
-    const ty = height / 2 - (scale * (minY + maxY)) / 2;
-    const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
-    const sel = animate ? svg.transition().duration(450) : svg;
-    sel.call(zoomBehavior.transform, t);
+    fitToNodes(pool, animate);
   }
 
   function focusNode(d) {
-    const scale = 1.35;
+    const scale = 1.25;
     const t = d3.zoomIdentity
       .translate(width / 2, height / 2)
       .scale(scale)
       .translate(-d.x, -d.y);
-    svg.transition().duration(400).call(zoomBehavior.transform, t);
+    svg.transition().duration(500).ease(d3.easeCubicOut).call(zoomBehavior.transform, t);
   }
 
   function showDrawer(d) {
@@ -441,7 +439,7 @@ async function drawMap() {
     applyFilters();
   }
 
-  function applyFilters() {
+  function applyFilters({ refit = false } = {}) {
     const q = document.getElementById("search-box").value.trim().toLowerCase();
     const showRunning = document.getElementById("flt-running").checked;
     const showStopped = document.getElementById("flt-stopped").checked;
@@ -500,6 +498,9 @@ async function drawMap() {
         .selectAll("circle")
         .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
         .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
+      if (refit && layoutReady && visibleNodes.length) {
+        fitToNodes(visibleNodes, true);
+      }
     }
   }
 
@@ -507,32 +508,42 @@ async function drawMap() {
     simulation.force("x").strength(clusterStrength);
     simulation.force("y").strength(clusterStrength);
     fittedOnce = false;
-    simulation.alpha(0.8).restart();
+    unpinLayout();
+    simulation.alpha(0.4).restart();
   }
 
   function fitToNodes(subset, animate = true) {
     const xs = subset.map((n) => n.x).filter(Number.isFinite);
     const ys = subset.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
-    const minX = Math.min(...xs) - 60;
-    const maxX = Math.max(...xs) + 60;
-    const minY = Math.min(...ys) - 60;
-    const maxY = Math.max(...ys) + 60;
-    const bw = Math.max(maxX - minX, 80);
-    const bh = Math.max(maxY - minY, 80);
-    const scale = Math.min((width - 80) / bw, (height - 80) / bh, 2.5) * 0.85;
+    const minX = Math.min(...xs) - 70;
+    const maxX = Math.max(...xs) + 70;
+    const minY = Math.min(...ys) - 70;
+    const maxY = Math.max(...ys) + 70;
+    const bw = Math.max(maxX - minX, 100);
+    const bh = Math.max(maxY - minY, 100);
+    const scale = Math.min((width - 80) / bw, (height - 80) / bh, 2.2) * 0.88;
     const tx = width / 2 - (scale * (minX + maxX)) / 2;
     const ty = height / 2 - (scale * (minY + maxY)) / 2;
     const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
-    const sel = animate ? svg.transition().duration(350) : svg;
+    svg.interrupt();
+    const sel = animate ? svg.transition().duration(550).ease(d3.easeCubicOut) : svg;
     sel.call(zoomBehavior.transform, t);
+  }
+
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
   }
 
   function drag(sim) {
     return d3
       .drag()
       .on("start", (event) => {
-        if (!event.active) sim.alphaTarget(0.2).restart();
+        if (!event.active) sim.alphaTarget(0.12).restart();
         event.subject.fx = event.subject.x;
         event.subject.fy = event.subject.y;
       })
@@ -555,9 +566,10 @@ async function drawMap() {
       const isAll = el.textContent === "все";
       el.classList.toggle("active", isAll ? !project : el.textContent === project);
     });
-    applyFilters();
+    applyFilters({ refit: true });
     fittedOnce = false;
-    simulation.alpha(0.7).restart();
+    unpinLayout();
+    simulation.alpha(0.35).restart();
   }
   const allChip = document.createElement("button");
   allChip.type = "button";
@@ -574,38 +586,37 @@ async function drawMap() {
     chips.appendChild(btn);
   });
 
-  document.getElementById("search-box").addEventListener("input", applyFilters);
-  document.getElementById("flt-running").addEventListener("change", applyFilters);
-  document.getElementById("flt-stopped").addEventListener("change", applyFilters);
-  document.getElementById("flt-external").addEventListener("change", applyFilters);
-  document.getElementById("flt-linked-only").addEventListener("change", () => {
-    applyFilters();
-    fittedOnce = false;
-    fitToScreen(true);
-  });
+  const debouncedSearch = debounce(() => applyFilters({ refit: true }), 200);
+  const debouncedPrefix = debounce(() => applyFilters({ refit: true }), 200);
+  const debouncedResize = debounce(() => fitToScreen(true), 200);
+
+  document.getElementById("search-box").addEventListener("input", debouncedSearch);
+  document.getElementById("flt-running").addEventListener("change", () => applyFilters());
+  document.getElementById("flt-stopped").addEventListener("change", () => applyFilters());
+  document.getElementById("flt-external").addEventListener("change", () => applyFilters());
+  document.getElementById("flt-linked-only").addEventListener("change", () => applyFilters({ refit: true }));
   document.getElementById("flt-cluster").addEventListener("change", updateClusterForce);
-  document.getElementById("flt-prefix").addEventListener("input", applyFilters);
+  document.getElementById("flt-prefix").addEventListener("input", debouncedPrefix);
   document.getElementById("btn-fit").addEventListener("click", () => fitToScreen(true));
   document.getElementById("btn-zoom-in").addEventListener("click", () => {
-    svg.transition().duration(200).call(zoomBehavior.scaleBy, 1.25);
+    svg.interrupt();
+    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 1.2);
   });
   document.getElementById("btn-zoom-out").addEventListener("click", () => {
-    svg.transition().duration(200).call(zoomBehavior.scaleBy, 0.8);
+    svg.interrupt();
+    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 0.84);
   });
   document.getElementById("btn-reset").addEventListener("click", () => {
-    nodes.forEach((n) => {
-      n.fx = null;
-      n.fy = null;
-    });
     localStorage.removeItem(STORAGE_KEY);
     fittedOnce = false;
-    simulation.alpha(1).restart();
+    unpinLayout();
+    simulation.alpha(0.6).restart();
     resetHighlight(true);
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") resetHighlight(true);
   });
-  window.addEventListener("resize", () => fitToScreen(false));
+  window.addEventListener("resize", debouncedResize);
 
   applyFilters();
 }

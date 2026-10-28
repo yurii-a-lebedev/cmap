@@ -201,7 +201,9 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow);
   overflow: hidden;
   margin-bottom: 18px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
+.card:hover { border-color: var(--line-strong); }
 .card-head {
   display: flex;
   align-items: center;
@@ -225,7 +227,11 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 10px;
 }
-.card-body { padding: 4px 20px 20px; }
+.card-body {
+  padding: 4px 20px 20px;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
 .card-body.hidden { display: none; }
 
 .table-wrap {
@@ -240,9 +246,10 @@ table {
   font-size: 0.92rem;
 }
 th, td {
-  padding: 12px 14px;
+  padding: 14px 16px;
   text-align: left;
   border-bottom: 1px solid var(--line);
+  border-right: none;
 }
 th {
   background: var(--bg-soft);
@@ -407,8 +414,11 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   font-weight: 600;
 }
 
-.node-circle { transition: opacity 0.15s ease; }
-.link-line { transition: opacity 0.15s ease; }
+.node-circle { transition: opacity 0.25s ease, stroke 0.2s ease, stroke-width 0.2s ease; }
+.link-line { transition: opacity 0.25s ease, stroke 0.2s ease; }
+.nav a, .btn, .project-chip, .chip {
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
 
 @media (max-width: 960px) {
   .map-layout {
