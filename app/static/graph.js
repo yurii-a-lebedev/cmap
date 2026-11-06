@@ -181,9 +181,6 @@ async function drawMap(options = {}) {
   // Снимок фильтров до временного раскрытия при фокусе на узле
   let filterSnapshot = null;
 
-  function isCompactMap() {
-    return window.matchMedia("(max-width: 960px)").matches;
-  }
   function syncPanelState() {
     if (!mapApp) return;
     mapApp.classList.toggle(
@@ -200,6 +197,14 @@ async function drawMap(options = {}) {
         mapApp.classList.contains("filters-open") ? "true" : "false"
       );
     }
+    const drawerBtn = document.getElementById("btn-toggle-drawer");
+    if (drawerBtn) {
+      drawerBtn.setAttribute(
+        "aria-expanded",
+        mapApp.classList.contains("drawer-open") ? "true" : "false"
+      );
+      drawerBtn.classList.toggle("has-selection", selectedNodes.size > 0);
+    }
   }
   function openFilters() {
     if (!mapApp) return;
@@ -208,7 +213,7 @@ async function drawMap(options = {}) {
     syncPanelState();
   }
   function openDrawerPanel() {
-    if (!mapApp || !isCompactMap()) return;
+    if (!mapApp) return;
     mapApp.classList.add("drawer-open");
     mapApp.classList.remove("filters-open");
     syncPanelState();
@@ -217,6 +222,13 @@ async function drawMap(options = {}) {
     if (!mapApp) return;
     mapApp.classList.remove("filters-open", "drawer-open", "panel-open");
     syncPanelState();
+  }
+  function updateDrawerButton() {
+    const drawerBtn = document.getElementById("btn-toggle-drawer");
+    if (!drawerBtn) return;
+    drawerBtn.classList.toggle("has-selection", selectedNodes.size > 0);
+    const sel = selectedNodes.size ? [...selectedNodes][0] : null;
+    drawerBtn.title = sel ? `Узел: ${sel.name}` : "Карточка узла";
   }
 
   let activeProject = "";
@@ -446,8 +458,20 @@ async function drawMap(options = {}) {
       selectedNodes.clear();
       selectedNodes.add(d);
       highlightConnections();
-      showDrawer(d);
+      fillDrawer(d);
       setNodeQuery(d.name);
+      updateDrawerButton();
+      // Шторку не открываем автоматически — только подсветка на карте
+    })
+    .on("dblclick", (event, d) => {
+      event.stopPropagation();
+      selectedNodes.clear();
+      selectedNodes.add(d);
+      highlightConnections();
+      fillDrawer(d);
+      setNodeQuery(d.name);
+      updateDrawerButton();
+      openDrawerPanel();
     });
 
   node.append("title").text((d) => d.name);
@@ -575,7 +599,8 @@ async function drawMap(options = {}) {
     selectedNodes.add(d);
     applyFilters();
     highlightConnections();
-    showDrawer(d);
+    fillDrawer(d);
+    updateDrawerButton();
     if (zoom) focusNode(d);
     setNodeQuery(d.name);
   }
@@ -615,7 +640,7 @@ async function drawMap(options = {}) {
     return ids;
   }
 
-  function showDrawer(d) {
+  function fillDrawer(d) {
     const empty = document.getElementById("drawer-empty");
     const body = document.getElementById("drawer-body");
     const clearBtn = document.getElementById("btn-clear-selection");
@@ -640,6 +665,10 @@ async function drawMap(options = {}) {
       <div><dt>Порты</dt><dd>${escapeHtml(ports)}</dd></div>
       <div><dt>connect_to</dt><dd>${escapeHtml(d.connect_to || "—")}</dd></div>
     `;
+  }
+
+  function showDrawer(d) {
+    fillDrawer(d);
     openDrawerPanel();
   }
 
@@ -648,7 +677,7 @@ async function drawMap(options = {}) {
     document.getElementById("drawer-body").hidden = true;
     const clearBtn = document.getElementById("btn-clear-selection");
     if (clearBtn) clearBtn.hidden = true;
-    closePanels();
+    updateDrawerButton();
   }
 
   function escapeHtml(s) {
@@ -705,6 +734,7 @@ async function drawMap(options = {}) {
       .attr("opacity", 1);
     linkLabels.style("visibility", "hidden");
     clearDrawer();
+    closePanels();
 
     if (filterSnapshot) {
       document.getElementById("flt-linked-only").checked = filterSnapshot.linkedOnly;
@@ -981,6 +1011,12 @@ async function drawMap(options = {}) {
     if (mapApp.classList.contains("filters-open")) closePanels();
     else openFilters();
   });
+  const drawerToggle = document.getElementById("btn-toggle-drawer");
+  on(drawerToggle, "click", () => {
+    if (!mapApp) return;
+    if (mapApp.classList.contains("drawer-open")) closePanels();
+    else openDrawerPanel();
+  });
   document.querySelectorAll("[data-close-panel]").forEach((btn) => {
     on(btn, "click", () => closePanels());
   });
@@ -991,17 +1027,17 @@ async function drawMap(options = {}) {
     const typing = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
     if (e.key === "/" && !typing) {
       e.preventDefault();
+      openFilters();
       document.getElementById("search-box")?.focus();
       return;
     }
     if (e.key === "Escape") {
-      // Сначала полный сброс выделения (иначе на mobile Esc только закрывал панель)
-      if (selectedNodes.size) {
-        resetHighlight(true);
-        return;
-      }
       if (mapApp && mapApp.classList.contains("panel-open")) {
         closePanels();
+        return;
+      }
+      if (selectedNodes.size) {
+        resetHighlight(true);
         return;
       }
       const search = document.getElementById("search-box");

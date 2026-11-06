@@ -64,7 +64,12 @@ a:hover { text-decoration: underline; }
   justify-content: flex-end;
   min-width: 0;
 }
-.btn.map-panel-btn { display: none; }
+.btn.map-panel-btn { display: inline-flex; }
+.btn.map-panel-btn.has-selection {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: rgba(15, 157, 138, 0.1);
+}
 
 .brand {
   display: flex;
@@ -358,20 +363,31 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   min-height: 0;
   height: auto;
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   position: relative;
 }
 .map-backdrop {
-  display: none;
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
   border: 0;
   padding: 0;
   margin: 0;
   background: rgba(28, 36, 48, 0.28);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.map-app.panel-open .map-backdrop {
+  opacity: 1;
+  pointer-events: auto;
 }
 .map-panel-head {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -392,17 +408,33 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   line-height: 1;
 }
 .map-side, .map-drawer {
-  background: rgba(255, 255, 255, 0.72);
-  border-right: 1px solid var(--line);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(360px, 92vw);
+  max-height: none;
+  background: rgba(255, 255, 255, 0.97);
   padding: 20px 18px;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   min-width: 0;
+  box-shadow: 0 12px 40px rgba(28, 36, 48, 0.16);
+  transition: transform 0.22s ease;
+}
+.map-side {
+  left: 0;
+  border-right: 1px solid var(--line);
+  transform: translateX(-105%);
 }
 .map-drawer {
-  border-right: 0;
+  right: 0;
+  left: auto;
   border-left: 1px solid var(--line);
+  transform: translateX(105%);
 }
+.map-app.filters-open .map-side { transform: translateX(0); }
+.map-app.drawer-open .map-drawer { transform: translateX(0); }
 .map-side h3, .map-drawer h3 {
   margin: 0 0 12px;
   font-size: 0.72rem;
@@ -414,6 +446,8 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
 .map-side .block { margin-bottom: 24px; }
 .map-side .input { width: 100%; }
 .map-canvas {
+  grid-column: 1;
+  grid-row: 1;
   position: relative;
   background-color: #f8fafc;
   overflow: hidden;
@@ -623,10 +657,6 @@ a.row-map-link:hover {
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-@media (max-width: 1180px) {
-  .map-layout { grid-template-columns: 240px minmax(0, 1fr) 260px; }
-}
-
 @media (max-width: 960px) {
   .page { width: calc(100% - 24px); margin: 20px auto 40px; }
   .page-head { margin-bottom: 18px; gap: 12px; }
@@ -664,57 +694,8 @@ a.row-map-link:hover {
   .host-item { padding: 14px; }
   .host-actions { width: 100%; }
   .host-actions .input { flex: 1 1 140px; }
-
-  .btn.map-panel-btn { display: inline-flex; padding: 7px 12px; font-size: 0.82rem; }
-  .map-panel-head { display: flex; }
-  .map-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-  }
-  .map-canvas {
-    grid-column: 1;
-    grid-row: 1;
-    min-height: 280px;
-  }
-  .map-backdrop {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.18s ease;
-  }
-  .map-app.panel-open .map-backdrop {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .map-side, .map-drawer {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(340px, 88vw);
-    max-height: none;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 12px 40px rgba(28, 36, 48, 0.16);
-    transition: transform 0.22s ease;
-  }
-  .map-side {
-    left: 0;
-    border-right: 1px solid var(--line);
-    border-left: 0;
-    transform: translateX(-105%);
-  }
-  .map-drawer {
-    right: 0;
-    left: auto;
-    border-left: 1px solid var(--line);
-    border-right: 0;
-    transform: translateX(105%);
-  }
-  .map-app.filters-open .map-side { transform: translateX(0); }
-  .map-app.drawer-open .map-drawer { transform: translateX(0); }
+  .btn.map-panel-btn { padding: 7px 12px; font-size: 0.82rem; }
+  .map-canvas { min-height: 280px; }
 }
 
 @media (max-width: 480px) {
