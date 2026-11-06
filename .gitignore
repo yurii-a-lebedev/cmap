@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# Env & local data
+.env
+**/.env
+!**/.env.example
+instance/*.db
+instance/*.db-*
+!instance/.gitkeep
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs / tmp
+*.log
+.tmp/
+tmp/

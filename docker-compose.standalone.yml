@@ -1,0 +1,25 @@
+# Локальный / публичный запуск без Traefik.
+# docker compose -f docker-compose.standalone.yml up -d --build
+services:
+  cmap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cmap
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./instance:/app/instance
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - FLASK_ENV=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - SQLALCHEMY_DATABASE_URI=sqlite:////app/instance/hosts.db
+    command: gunicorn -w 2 -b 0.0.0.0:5000 app.main:app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

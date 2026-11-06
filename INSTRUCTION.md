@@ -1,12 +1,14 @@
-# CMAP — инструкция по запуску
+# CMAP — инструкция по запуску (tx0)
 
 Карта Docker-контейнеров и связей по лейблу `connect_to`. TLS через Traefik. Доступ только из офисных/локальных сетей (`internal-allowlist`).
+
+Общее описание и standalone-запуск: [README.md](README.md).
 
 | | |
 |---|---|
 | Веб | `https://cmap.main.tx0.ru` |
 | Конфиг | `/data/config/cmap/` |
-| БД хостов | `/data/config/cmap/instance/hosts.db` |
+| БД хостов | `/data/config/cmap/instance/hosts.db` (не в git) |
 | Репозиторий | `https://gitlab.main.tx0.ru/lebedev/cmap` |
 
 Связи на карте: лейбл `connect_to=service:port` (несколько через запятую).
@@ -14,12 +16,12 @@
 ## UI
 
 - **Контейнеры** — список, поиск, фильтр running/stopped; клик по имени → `/map?node=…`
-- **Карта** — по умолчанию узлы со связями, кластер по compose `project`, чипы проектов, Fit/zoom/Refresh, блок «без connect_to», poll ~20с, сайдбар узла
+- **Карта** — кластер по compose `project`, Fit/zoom/Refresh, блок «без connect_to», poll ~20с; шторка узла по кнопке «Узел» / dblclick
 - **Хосты** — `localhost` через docker.sock, удаление localhost запрещено
 
 Связи резолвятся по имени контейнера, compose service (+ project) и fuzzy-имени.
 
-## Запуск
+## Запуск (продакшен за Traefik)
 
 ```bash
 cd /data/config/cmap
@@ -27,6 +29,8 @@ docker compose up -d --build
 docker compose ps
 docker logs cmap --tail 50
 ```
+
+Без Traefik (локально): `docker compose -f docker-compose.standalone.yml up -d --build`.
 
 Проверка (из сети allowlist):
 
