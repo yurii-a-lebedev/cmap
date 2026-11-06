@@ -133,6 +133,27 @@ async function drawMap(options = {}) {
     }
   });
 
+  // Узлы, у которых все связи только на external:* (напр. tx0-ns1 → gw) —
+  // не должны сидеть в звезде traefik и резать чужие лучи.
+  const nbrIds = new Map();
+  links.forEach((l) => {
+    if (!nbrIds.has(l.source)) nbrIds.set(l.source, []);
+    if (!nbrIds.has(l.target)) nbrIds.set(l.target, []);
+    nbrIds.get(l.source).push(l.target);
+    nbrIds.get(l.target).push(l.source);
+  });
+  const externalLeafIds = new Set();
+  const leafExternalTarget = new Map();
+  nodes.forEach((n) => {
+    if (n.state === "external") return;
+    const ids = nbrIds.get(n.id) || [];
+    if (!ids.length) return;
+    if (ids.every((id) => String(id).startsWith("external:"))) {
+      externalLeafIds.add(n.id);
+      leafExternalTarget.set(n.id, ids[0]);
+    }
+  });
+
   const datalist = document.getElementById("node-names");
   nodes.forEach((n) => {
     const opt = document.createElement("option");
@@ -256,11 +277,18 @@ async function drawMap(options = {}) {
   };
 
   let restoredCount = 0;
+  let leafOrbit = 0;
   nodes.forEach((n, i) => {
-    if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
+    if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y) && !externalLeafIds.has(n.id)) {
       n.x = saved[n.id].x;
       n.y = saved[n.id].y;
       restoredCount += 1;
+    } else if (externalLeafIds.has(n.id)) {
+      // Сразу у шлюза, а не внутри чужой звезды
+      const c = projectCenters.external;
+      const angle = -Math.PI / 2 + (leafOrbit++ - 0.5) * 0.55;
+      n.x = c.x + Math.cos(angle) * 120;
+      n.y = c.y + Math.sin(angle) * 90 + 70;
     } else {
       const key = n.state === "external" ? "external" : n.project || "_none";
       const c = projectCenters[key] || projectCenters._none;
@@ -346,6 +374,30 @@ async function drawMap(options = {}) {
     return force;
   }
 
+  function forceExternalLeaves(strength = 0.16) {
+    let nodesArr;
+    const byId = () => new Map(nodesArr.map((n) => [n.id, n]));
+    function force(alpha) {
+      const map = byId();
+      const k = strength * alpha;
+      externalLeafIds.forEach((id) => {
+        const n = map.get(id);
+        const ext = map.get(leafExternalTarget.get(id));
+        if (!n || !ext || !Number.isFinite(ext.x) || !Number.isFinite(ext.y)) return;
+        if (n.fx != null || n.fy != null) return;
+        // держим лист рядом со шлюзом, сбоку — чтобы не лезть в чужие лучи
+        const tx = ext.x + (n.x >= ext.x ? 110 : -110);
+        const ty = ext.y + 95;
+        n.vx += (tx - n.x) * k;
+        n.vy += (ty - n.y) * k;
+      });
+    }
+    force.initialize = (n) => {
+      nodesArr = n;
+    };
+    return force;
+  }
+
   const simulation = d3
     .forceSimulation(nodes)
     .force(
@@ -353,8 +405,8 @@ async function drawMap(options = {}) {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(260)
-        .strength(0.14)
+        .distance((l) => (l.resolved === "external" ? 300 : 260))
+        .strength((l) => (l.resolved === "external" ? 0.26 : 0.14))
     )
     .force(
       "charge",
@@ -366,25 +418,28 @@ async function drawMap(options = {}) {
     )
     .force("collide", d3.forceCollide().radius(72).strength(0.45).iterations(2))
     .force("straighten", forceStraighten(0.08))
+    .force("externalLeaves", forceExternalLeaves(0.18))
     .force("centerX", d3.forceX(width / 2).strength(0.018))
     .force("centerY", d3.forceY(height / 2).strength(0.018))
     .force(
       "x",
       d3
         .forceX((d) => {
+          if (externalLeafIds.has(d.id)) return projectCenters.external.x;
           const key = d.state === "external" ? "external" : d.project || "_none";
           return (projectCenters[key] || projectCenters._none).x;
         })
-        .strength(clusterStrength)
+        .strength((d) => (externalLeafIds.has(d.id) ? 0.08 : clusterStrength()))
     )
     .force(
       "y",
       d3
         .forceY((d) => {
+          if (externalLeafIds.has(d.id)) return projectCenters.external.y + 80;
           const key = d.state === "external" ? "external" : d.project || "_none";
           return (projectCenters[key] || projectCenters._none).y;
         })
-        .strength(clusterStrength)
+        .strength((d) => (externalLeafIds.has(d.id) ? 0.1 : clusterStrength()))
     )
     .velocityDecay(0.55)
     .alphaDecay(0.012)
