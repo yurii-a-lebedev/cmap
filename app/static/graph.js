@@ -195,7 +195,7 @@ async function drawMap(options = {}) {
     syncPanelState();
   }
 
-  const STORAGE_KEY = "cmap-node-positions-v3";
+  const STORAGE_KEY = "cmap-node-positions-v4";
   let activeProject = "";
   const saved = (() => {
     try {
@@ -257,11 +257,11 @@ async function drawMap(options = {}) {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(150)
-        .strength(0.5)
+        .distance(180)
+        .strength(0.45)
     )
-    .force("charge", d3.forceManyBody().strength(-380))
-    .force("collide", d3.forceCollide().radius(50).strength(0.8))
+    .force("charge", d3.forceManyBody().strength(-520))
+    .force("collide", d3.forceCollide().radius(56).strength(0.9))
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force(
       "x",
@@ -281,8 +281,8 @@ async function drawMap(options = {}) {
         })
         .strength(clusterStrength)
     )
-    .velocityDecay(0.45)
-    .alphaDecay(0.04)
+    .velocityDecay(0.35)
+    .alphaDecay(0.022)
     .alphaMin(0.001);
 
   const link = g
@@ -406,14 +406,6 @@ async function drawMap(options = {}) {
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
   });
 
-  function pinLayout() {
-    nodes.forEach((n) => {
-      n.fx = n.x;
-      n.fy = n.y;
-    });
-    persistPositions();
-  }
-
   function unpinLayout() {
     nodes.forEach((n) => {
       n.fx = null;
@@ -421,9 +413,15 @@ async function drawMap(options = {}) {
     });
   }
 
+  function reheat(alpha = 0.35) {
+    unpinLayout();
+    simulation.alpha(alpha).restart();
+  }
+
   simulation.on("end", () => {
     if (destroyed) return;
-    pinLayout();
+    // Не фиксируем fx/fy — иначе граф «замирает» и не расправляется
+    persistPositions();
     layoutReady = true;
     if (!fittedOnce) {
       fittedOnce = true;
@@ -704,8 +702,7 @@ async function drawMap(options = {}) {
     simulation.force("x").strength(clusterStrength);
     simulation.force("y").strength(clusterStrength);
     fittedOnce = false;
-    unpinLayout();
-    simulation.alpha(0.4).restart();
+    reheat(0.45);
   }
 
   function fitToNodes(subset, animate = true) {
@@ -739,7 +736,7 @@ async function drawMap(options = {}) {
     return d3
       .drag()
       .on("start", (event) => {
-        if (!event.active) sim.alphaTarget(0.12).restart();
+        if (!event.active) sim.alphaTarget(0.18).restart();
         event.subject.fx = event.subject.x;
         event.subject.fy = event.subject.y;
       })
@@ -748,9 +745,11 @@ async function drawMap(options = {}) {
         event.subject.fy = event.y;
       })
       .on("end", (event) => {
+        event.subject.fx = null;
+        event.subject.fy = null;
         if (!event.active) sim.alphaTarget(0);
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
+        // Отпустили узел — симуляция снова расправляет соседей
+        sim.alpha(Math.max(sim.alpha(), 0.25)).restart();
         persistPositions();
       });
   }
@@ -781,8 +780,7 @@ async function drawMap(options = {}) {
     });
     applyFilters({ refit: true });
     fittedOnce = false;
-    unpinLayout();
-    simulation.alpha(0.35).restart();
+    reheat(0.4);
   }
   const allChip = document.createElement("button");
   allChip.type = "button";
@@ -856,8 +854,7 @@ async function drawMap(options = {}) {
   on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
     fittedOnce = false;
-    unpinLayout();
-    simulation.alpha(0.6).restart();
+    reheat(0.8);
     resetHighlight(true);
   });
   on(document.getElementById("btn-refresh"), "click", () => {
