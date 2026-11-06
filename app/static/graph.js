@@ -271,6 +271,50 @@ async function drawMap(options = {}) {
     return document.getElementById("flt-cluster").checked ? 0.12 : 0.015;
   }
 
+  /** Выпрямляет цепочки A—B—C: B тянется к линии между A и C (не хабы). */
+  function forceStraighten(strength = 0.07) {
+    let nodesArr;
+    function force(alpha) {
+      const adj = new Map();
+      links.forEach((l) => {
+        const s = l.source;
+        const t = l.target;
+        if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+        if (!adj.has(s.id)) adj.set(s.id, []);
+        if (!adj.has(t.id)) adj.set(t.id, []);
+        adj.get(s.id).push(t);
+        adj.get(t.id).push(s);
+      });
+      const k = strength * alpha;
+      nodesArr.forEach((n) => {
+        if (n.fx != null || n.fy != null) return;
+        const nb = adj.get(n.id);
+        if (!nb || nb.length < 2 || nb.length > 3) return;
+        const pairW = nb.length === 2 ? 1 : 0.3;
+        for (let i = 0; i < nb.length; i++) {
+          for (let j = i + 1; j < nb.length; j++) {
+            const a = nb[i];
+            const b = nb[j];
+            // проекция n на отрезок ab → выпрямление без сжатия в точку
+            const abx = b.x - a.x;
+            const aby = b.y - a.y;
+            const len2 = abx * abx + aby * aby || 1;
+            let t = ((n.x - a.x) * abx + (n.y - a.y) * aby) / len2;
+            t = Math.max(0.2, Math.min(0.8, t));
+            const px = a.x + abx * t;
+            const py = a.y + aby * t;
+            n.vx += (px - n.x) * k * pairW;
+            n.vy += (py - n.y) * k * pairW;
+          }
+        }
+      });
+    }
+    force.initialize = (n) => {
+      nodesArr = n;
+    };
+    return force;
+  }
+
   const simulation = d3
     .forceSimulation(nodes)
     .force(
@@ -279,7 +323,7 @@ async function drawMap(options = {}) {
         .forceLink(links)
         .id((d) => d.id)
         .distance(260)
-        .strength(0.12)
+        .strength(0.14)
     )
     .force(
       "charge",
@@ -290,6 +334,7 @@ async function drawMap(options = {}) {
         .distanceMax(720)
     )
     .force("collide", d3.forceCollide().radius(72).strength(0.45).iterations(2))
+    .force("straighten", forceStraighten(0.08))
     .force("centerX", d3.forceX(width / 2).strength(0.018))
     .force("centerY", d3.forceY(height / 2).strength(0.018))
     .force(
