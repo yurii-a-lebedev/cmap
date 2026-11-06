@@ -982,8 +982,9 @@ async function drawMap(options = {}) {
   }
 
   function zoomBy(factor) {
+    framingLive = false;
     svg.interrupt();
-    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, factor);
+    svg.transition().duration(280).ease(d3.easeCubicInOut).call(zoomBehavior.scaleBy, factor);
   }
 
   on(document.getElementById("search-box"), "input", debouncedSearch);
