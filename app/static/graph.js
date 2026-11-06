@@ -176,6 +176,9 @@ async function drawMap(options = {}) {
   const selectedNodes = new Set();
   let zoomBehavior;
   let fittedOnce = false;
+  /** Пока true — камера тихо следует за раскладкой, без «появились → потом зум». */
+  let framingLive = true;
+  let frameTick = 0;
   let layoutReady = false;
   let destroyed = false;
   // Снимок фильтров до временного раскрытия при фокусе на узле
@@ -289,6 +292,8 @@ async function drawMap(options = {}) {
     })
     .on("zoom", (event) => {
       g.attr("transform", event.transform);
+      // Ручной pan/zoom — не перетягивать кадр автофитом
+      if (event.sourceEvent && framingLive) framingLive = false;
     });
   svg.call(zoomBehavior);
 
@@ -522,6 +527,7 @@ async function drawMap(options = {}) {
       (d) => `translate(${(d.source.x + d.target.x) / 2},${(d.source.y + d.target.y) / 2})`
     );
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    if (framingLive && ++frameTick % 2 === 0) fitToScreen(false);
   });
 
   function unpinLayout() {
@@ -536,17 +542,27 @@ async function drawMap(options = {}) {
     simulation.alpha(Math.min(alpha, 0.35)).restart();
   }
 
+  function startLiveFraming() {
+    framingLive = true;
+    fittedOnce = false;
+    frameTick = 0;
+  }
+
   simulation.on("end", () => {
     if (destroyed) return;
     // Не фиксируем fx/fy — иначе граф «замирает» и не расправляется
     persistPositions();
     layoutReady = true;
-    if (!fittedOnce) {
+    if (!fittedOnce || framingLive) {
       fittedOnce = true;
-      fitToScreen(true);
+      framingLive = false;
+      fitToScreen(false);
       focusFromQuery(preserveNode);
     }
   });
+
+  // Сразу поставить кадр по известным координатам — без вспышки 1:1 и последующего зума
+  if (restoredCount > 0) fitToScreen(false);
 
   function nodeColor(d) {
     if (d.state === "running") return "#5ecf8a";
@@ -579,7 +595,9 @@ async function drawMap(options = {}) {
       .translate(width / 2, height / 2)
       .scale(scale)
       .translate(-d.x, -d.y);
-    svg.transition().duration(500).ease(d3.easeCubicOut).call(zoomBehavior.transform, t);
+    framingLive = false;
+    svg.interrupt();
+    svg.transition().duration(380).ease(d3.easeCubicInOut).call(zoomBehavior.transform, t);
   }
 
   function beginSelectionFocus(d, { zoom = true } = {}) {
@@ -825,7 +843,7 @@ async function drawMap(options = {}) {
   function updateClusterForce() {
     simulation.force("x").strength(clusterStrength);
     simulation.force("y").strength(clusterStrength);
-    fittedOnce = false;
+    startLiveFraming();
     reheat(0.22);
   }
 
@@ -843,8 +861,9 @@ async function drawMap(options = {}) {
     const tx = width / 2 - (scale * (minX + maxX)) / 2;
     const ty = height / 2 - (scale * (minY + maxY)) / 2;
     const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    if (animate) framingLive = false;
     svg.interrupt();
-    const sel = animate ? svg.transition().duration(550).ease(d3.easeCubicOut) : svg;
+    const sel = animate ? svg.transition().duration(420).ease(d3.easeCubicInOut) : svg;
     sel.call(zoomBehavior.transform, t);
   }
 
@@ -903,7 +922,7 @@ async function drawMap(options = {}) {
       el.classList.toggle("active", isAll ? !project : el.textContent === project);
     });
     applyFilters({ refit: true });
-    fittedOnce = false;
+    startLiveFraming();
     reheat(0.2);
   }
   const allChip = document.createElement("button");
@@ -995,7 +1014,7 @@ async function drawMap(options = {}) {
   on(document.getElementById("btn-zoom-out-float"), "click", () => zoomBy(0.84));
   on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
-    fittedOnce = false;
+    startLiveFraming();
     reheat(0.3);
     resetHighlight(true);
   });
