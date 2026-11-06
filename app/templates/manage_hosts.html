@@ -10,23 +10,9 @@
 </head>
 <body>
   <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">
-        <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
-        CMAP <span>container map</span>
-      </div>
-      <div class="topbar-actions">
-        <div class="lang-switch" role="group" aria-label="{{ _('lang.label') }}">
-          <button type="button" class="btn lang-btn{% if lang == 'ru' %} active{% endif %}" data-set-lang="ru">RU</button>
-          <button type="button" class="btn lang-btn{% if lang == 'en' %} active{% endif %}" data-set-lang="en">EN</button>
-        </div>
-        <nav class="nav">
-          <a href="/">{{ _('nav.containers') }}</a>
-          <a href="/map">{{ _('nav.map') }}</a>
-          <a class="active" href="/manage_hosts">{{ _('nav.hosts') }}</a>
-        </nav>
-      </div>
-    </header>
+    {% set active = 'hosts' %}
+    {% set map_tools = false %}
+    {% include 'partials/topbar.html' %}
 
     <main class="page">
       <div class="page-head">
@@ -39,7 +25,7 @@
       <ul class="host-list" id="host-list"></ul>
       <div class="toast" id="list-toast"></div>
 
-      <h2 style="margin:28px 0 12px;font-size:1.1rem">{{ _('hosts.add_heading') }}</h2>
+      <h2 class="section-title">{{ _('hosts.add_heading') }}</h2>
       <form class="form-card" id="host-form">
         <label>{{ _('hosts.host') }}
           <input class="input" id="host" required placeholder="{{ _('hosts.host_ph') }}">

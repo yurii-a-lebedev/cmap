@@ -25,7 +25,10 @@
 
   function bindLangSwitch() {
     document.querySelectorAll("[data-set-lang]").forEach((btn) => {
-      btn.addEventListener("click", () => setLang(btn.getAttribute("data-set-lang")));
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        setLang(btn.getAttribute("data-set-lang"));
+      });
     });
   }
 

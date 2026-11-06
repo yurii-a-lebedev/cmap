@@ -10,25 +10,9 @@
   <script src="{{ url_for('static', filename='i18n.js') }}"></script>
 </head>
 <body class="map-app">
-  <header class="topbar">
-    <div class="brand">
-      <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
-      CMAP <span>container map</span>
-    </div>
-    <div class="topbar-actions">
-      <button class="btn map-panel-btn" type="button" id="btn-toggle-filters" aria-expanded="false" aria-controls="map-side">{{ _('map.filters') }}</button>
-      <button class="btn map-panel-btn" type="button" id="btn-toggle-drawer" aria-expanded="false" aria-controls="drawer">{{ _('map.node') }}</button>
-      <div class="lang-switch" role="group" aria-label="{{ _('lang.label') }}">
-        <button type="button" class="btn lang-btn{% if lang == 'ru' %} active{% endif %}" data-set-lang="ru">RU</button>
-        <button type="button" class="btn lang-btn{% if lang == 'en' %} active{% endif %}" data-set-lang="en">EN</button>
-      </div>
-      <nav class="nav">
-        <a href="/">{{ _('nav.containers') }}</a>
-        <a class="active" href="/map">{{ _('nav.map') }}</a>
-        <a href="/manage_hosts">{{ _('nav.hosts') }}</a>
-      </nav>
-    </div>
-  </header>
+  {% set active = 'map' %}
+  {% set map_tools = true %}
+  {% include 'partials/topbar.html' %}
 
   <div class="map-layout">
     <button class="map-backdrop" type="button" id="map-backdrop" aria-label="{{ _('map.close_panel') }}" hidden></button>

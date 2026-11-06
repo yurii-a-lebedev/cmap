@@ -1,0 +1,30 @@
+{# active: containers | map | hosts ; map_tools: bool #}
+<header class="topbar">
+  <a class="brand" href="/" aria-label="CMAP">
+    <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
+    <span class="brand-name">CMAP</span>
+  </a>
+
+  <div class="topbar-end">
+    {% if map_tools %}
+    <div class="topbar-tools" role="toolbar" aria-label="{{ _('map.tools') }}">
+      <button class="btn btn-quiet map-panel-btn" type="button" id="btn-toggle-filters" aria-expanded="false" aria-controls="map-side">{{ _('map.filters') }}</button>
+      <button class="btn btn-quiet map-panel-btn" type="button" id="btn-toggle-drawer" aria-expanded="false" aria-controls="drawer">{{ _('map.node') }}</button>
+    </div>
+    {% endif %}
+
+    <nav class="nav" aria-label="CMAP">
+      <a href="/" class="{% if active == 'containers' %}active{% endif %}">{{ _('nav.containers') }}</a>
+      <a href="/map" class="{% if active == 'map' %}active{% endif %}">{{ _('nav.map') }}</a>
+      <a href="/manage_hosts" class="{% if active == 'hosts' %}active{% endif %}">{{ _('nav.hosts') }}</a>
+    </nav>
+
+    <button
+      type="button"
+      class="lang-toggle"
+      data-set-lang="{{ 'en' if lang == 'ru' else 'ru' }}"
+      title="{{ _('lang.label') }}: {{ 'EN' if lang == 'ru' else 'RU' }}"
+      aria-label="{{ _('lang.label') }}"
+    >{{ lang|upper }}</button>
+  </div>
+</header>

@@ -1,19 +1,19 @@
 # CMAP — деплой за Traefik
 
-Карта Docker-контейнеров и связей по лейблу `connect_to`.  
-Общее описание и локальный запуск: [README.md](README.md).
+Обзор продукта и локальный запуск: [README.md](README.md).
 
-## Переменные окружения
+## Переменные
 
-В каталоге приложения создайте `.env` (не коммитится):
+Файл `.env` в каталоге приложения (не в git, CI его не затирает):
 
 ```bash
 CMAP_HOST=cmap.example.com
 CMAP_CHECK_IP=127.0.0.1
+# совместимость со старым именем:
+# DOMAIN=cmap.example.com
 ```
 
-`CMAP_HOST` подставляется в Traefik `Host()` правила в `docker-compose.yml`.  
-`CMAP_CHECK_IP` — адрес для CI healthcheck через `--resolve`.
+`CMAP_HOST` (или `DOMAIN`) подставляется в Traefik `Host()` в `docker-compose.yml`.
 
 ## Запуск
 
@@ -26,8 +26,6 @@ docker logs cmap --tail 50
 
 Без Traefik: `docker compose -f docker-compose.standalone.yml up -d --build`.
 
-Проверка:
-
 ```bash
 curl -sk -o /dev/null -w "%{http_code}\n" \
   --resolve "${CMAP_HOST}:443:${CMAP_CHECK_IP}" \
@@ -36,11 +34,17 @@ curl -sk -o /dev/null -w "%{http_code}\n" \
 
 ## CI
 
-Runner с тегом `main`: rsync → каталог приложения, затем `docker compose up -d --build`.  
-`.env` и `instance/` sync не трогает.
+Runner с тегом `main`: rsync → каталог приложения → `docker compose up -d --build`.  
+Исключены из sync: `.env`, `instance/`, `.git/`.
+
+## UI / i18n
+
+- Язык: `Accept-Language` → cookie `cmap_lang` → `?lang=ru|en`
+- Общая шапка: `app/templates/partials/topbar.html`
+- Строки: `app/i18n.py` (+ клиент через `window.CMAP_I18N`)
 
 ## Безопасность
 
-- Ограничьте доступ middleware allowlist / VPN
-- docker.sock монтируется **read-only**
-- Не публикуйте `instance/hosts.db` и `.env`
+- allowlist / VPN на входе
+- docker.sock **read-only**
+- не публиковать `instance/hosts.db` и `.env`

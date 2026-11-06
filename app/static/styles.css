@@ -50,44 +50,58 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 20px;
-  padding: 16px 28px;
-  background: rgba(238, 242, 246, 0.82);
-  border-bottom: 1px solid transparent;
+  gap: 12px 16px;
+  padding: 10px 20px;
+  background: rgba(238, 242, 246, 0.88);
+  border-bottom: 1px solid rgba(200, 208, 220, 0.45);
   backdrop-filter: blur(12px);
 }
-.topbar-actions {
+.topbar-end {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
   min-width: 0;
 }
-.lang-switch {
+.topbar-tools {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  align-items: center;
+  gap: 6px;
 }
-.lang-btn {
-  min-width: 36px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font-size: 0.75rem;
-  font-weight: 600;
+.lang-toggle {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+.lang-toggle:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-dim);
+  background: #fff;
+}
+.btn.btn-quiet {
+  padding: 7px 12px;
+  font-size: 0.86rem;
+  background: transparent;
+  border-color: transparent;
   color: var(--muted);
 }
-.lang-btn.active {
-  background: var(--accent-dim);
-  color: var(--accent-ink);
+.btn.btn-quiet:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--line);
+  color: var(--text);
 }
-.lang-btn:hover { text-decoration: none; }
 .btn.map-panel-btn { display: inline-flex; }
 .btn.map-panel-btn.has-selection {
   border-color: var(--accent);
@@ -96,45 +110,44 @@ a:hover { text-decoration: underline; }
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  color: var(--text);
   font-weight: 700;
   letter-spacing: -0.02em;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
+  text-decoration: none;
+  min-width: 0;
 }
+.brand:hover { text-decoration: none; color: var(--text); }
 .brand-mark {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: block;
   flex: 0 0 auto;
   opacity: 0.95;
 }
-.brand span {
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: var(--muted);
-  font-weight: 400;
-  letter-spacing: 0;
-}
+.brand-name { line-height: 1; }
 
 .nav {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: wrap;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.7);
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
   border-radius: 999px;
 }
 .nav a {
   color: var(--muted);
   text-decoration: none;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 500;
   transition: 0.15s ease;
+  white-space: nowrap;
 }
 .nav a:hover { color: var(--text); background: rgba(15, 157, 138, 0.08); text-decoration: none; }
 .nav a.active {
@@ -145,8 +158,14 @@ a:hover { text-decoration: underline; }
 }
 
 .page {
-  width: min(1120px, calc(100% - 48px));
-  margin: 36px auto 64px;
+  width: min(1120px, calc(100% - 40px));
+  margin: 28px auto 56px;
+}
+.section-title {
+  margin: 28px 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .page-head {
@@ -692,14 +711,14 @@ a.row-map-link:hover {
     flex-wrap: nowrap;
   }
   .brand { flex: 0 0 auto; min-width: 0; }
-  .brand span { display: none; }
-  .topbar-actions {
+  .topbar-end {
     flex: 1 1 auto;
     flex-wrap: nowrap;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
+  .topbar-tools { gap: 4px; }
   .nav {
     gap: 2px;
     padding: 3px;
@@ -707,6 +726,7 @@ a.row-map-link:hover {
     min-width: 0;
   }
   .nav a { padding: 7px 10px; font-size: 0.82rem; white-space: nowrap; }
+  .lang-toggle { width: 32px; height: 30px; }
   .chip-row { gap: 8px; margin-bottom: 16px; }
   .chip { padding: 6px 10px; font-size: 0.8rem; }
   .toolbar { gap: 8px; margin-bottom: 16px; }
