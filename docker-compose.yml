@@ -17,10 +17,10 @@ services:
       - traefik.http.middlewares.cmap_https.redirectscheme.scheme=https
       - traefik.http.routers.cmap.entrypoints=web
       - traefik.http.routers.cmap.middlewares=internal-allowlist@file,cmap_https@docker
-      - traefik.http.routers.cmap.rule=Host(`cmap.main.tx0.ru`)
+      - traefik.http.routers.cmap.rule=Host(`${CMAP_HOST:-${DOMAIN:-cmap.example.com}}`)
       - traefik.http.routers.cmap_https.entrypoints=websecure
       - traefik.http.routers.cmap_https.middlewares=internal-allowlist@file
-      - traefik.http.routers.cmap_https.rule=Host(`cmap.main.tx0.ru`)
+      - traefik.http.routers.cmap_https.rule=Host(`${CMAP_HOST:-${DOMAIN:-cmap.example.com}}`)
       - traefik.http.routers.cmap_https.tls=true
       - traefik.http.routers.cmap_https.tls.certresolver=le
       - traefik.http.services.cmap.loadbalancer.server.port=5000

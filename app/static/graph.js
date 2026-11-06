@@ -133,8 +133,7 @@ async function drawMap(options = {}) {
     }
   });
 
-  // Узлы, у которых все связи только на external:* (напр. tx0-ns1 → gw) —
-  // не должны сидеть в звезде traefik и резать чужие лучи.
+  // Узлы только с external-связями — держим у шлюза, не внутри чужой звезды.
   const nbrIds = new Map();
   links.forEach((l) => {
     if (!nbrIds.has(l.source)) nbrIds.set(l.source, []);

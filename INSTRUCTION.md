@@ -1,52 +1,46 @@
-# CMAP — инструкция по запуску (tx0)
+# CMAP — деплой за Traefik
 
-Карта Docker-контейнеров и связей по лейблу `connect_to`. TLS через Traefik. Доступ только из офисных/локальных сетей (`internal-allowlist`).
+Карта Docker-контейнеров и связей по лейблу `connect_to`.  
+Общее описание и локальный запуск: [README.md](README.md).
 
-Общее описание и standalone-запуск: [README.md](README.md).
+## Переменные окружения
 
-| | |
-|---|---|
-| Веб | `https://cmap.main.tx0.ru` |
-| Конфиг | `/data/config/cmap/` |
-| БД хостов | `/data/config/cmap/instance/hosts.db` (не в git) |
-| Репозиторий | `https://gitlab.main.tx0.ru/lebedev/cmap` |
-
-Связи на карте: лейбл `connect_to=service:port` (несколько через запятую).
-
-## UI
-
-- **Контейнеры** — список, поиск, фильтр running/stopped; клик по имени → `/map?node=…`
-- **Карта** — кластер по compose `project`, Fit/zoom/Refresh, блок «без connect_to», poll ~20с; шторка узла по кнопке «Узел» / dblclick
-- **Хосты** — `localhost` через docker.sock, удаление localhost запрещено
-
-Связи резолвятся по имени контейнера, compose service (+ project) и fuzzy-имени.
-
-## Запуск (продакшен за Traefik)
+В каталоге приложения создайте `.env` (не коммитится):
 
 ```bash
-cd /data/config/cmap
+CMAP_HOST=cmap.example.com
+CMAP_CHECK_IP=127.0.0.1
+```
+
+`CMAP_HOST` подставляется в Traefik `Host()` правила в `docker-compose.yml`.  
+`CMAP_CHECK_IP` — адрес для CI healthcheck через `--resolve`.
+
+## Запуск
+
+```bash
+mkdir -p instance
 docker compose up -d --build
 docker compose ps
 docker logs cmap --tail 50
 ```
 
-Без Traefik (локально): `docker compose -f docker-compose.standalone.yml up -d --build`.
+Без Traefik: `docker compose -f docker-compose.standalone.yml up -d --build`.
 
-Проверка (из сети allowlist):
+Проверка:
 
 ```bash
 curl -sk -o /dev/null -w "%{http_code}\n" \
-  --resolve cmap.main.tx0.ru:443:192.168.100.200 \
-  https://cmap.main.tx0.ru/healthz
+  --resolve "${CMAP_HOST}:443:${CMAP_CHECK_IP}" \
+  "https://${CMAP_HOST}/healthz"
 ```
 
-## Деплой
+## CI
 
-CI (тег раннера `main`): sync → `/data/config/cmap`, затем `docker compose up -d --build`.  
-`.env` и `instance/` sync не трогает. Права каталога: `gitlab-runner`.
+Runner с тегом `main`: rsync → каталог приложения, затем `docker compose up -d --build`.  
+`.env` и `instance/` sync не трогает.
 
 ## Безопасность
 
-- Traefik middleware `internal-allowlist@file`
-- docker.sock смонтирован **read-only**
-- Снаружи LAN без VPN ответа не будет (это ожидаемо)
+- Ограничьте доступ middleware allowlist / VPN
+- docker.sock монтируется **read-only**
+- Не публикуйте `instance/hosts.db` и `.env`
