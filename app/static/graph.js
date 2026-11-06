@@ -257,10 +257,24 @@ async function drawMap(options = {}) {
 
   const svg = d3.select(svgEl).attr("viewBox", `0 0 ${width} ${height}`);
   const g = svg.append("g");
+  // Прозрачный фон под графом: клик = сброс выделения
+  const hitbox = g
+    .append("rect")
+    .attr("class", "map-hitbox")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("fill", "transparent")
+    .style("cursor", "default")
+    .on("click", () => resetHighlight(true));
 
   zoomBehavior = d3
     .zoom()
     .scaleExtent([0.15, 4])
+    .filter((event) => {
+      // Не начинать pan со wheel+ctrl only; клики по узлам — как обычно
+      if (event.type === "wheel") return true;
+      return !event.button;
+    })
     .on("zoom", (event) => {
       g.attr("transform", event.transform);
     });
@@ -604,8 +618,10 @@ async function drawMap(options = {}) {
   function showDrawer(d) {
     const empty = document.getElementById("drawer-empty");
     const body = document.getElementById("drawer-body");
+    const clearBtn = document.getElementById("btn-clear-selection");
     empty.hidden = true;
     body.hidden = false;
+    if (clearBtn) clearBtn.hidden = false;
     const ports =
       (d.ports || [])
         .map((p) => {
@@ -630,6 +646,8 @@ async function drawMap(options = {}) {
   function clearDrawer() {
     document.getElementById("drawer-empty").hidden = false;
     document.getElementById("drawer-body").hidden = true;
+    const clearBtn = document.getElementById("btn-clear-selection");
+    if (clearBtn) clearBtn.hidden = true;
     closePanels();
   }
 
@@ -886,6 +904,7 @@ async function drawMap(options = {}) {
     width = nextW;
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
+    hitbox.attr("width", width).attr("height", height);
     simulation.force("centerX", d3.forceX(width / 2).strength(0.018));
     simulation.force("centerY", d3.forceY(height / 2).strength(0.018));
     const rSpread = Math.min(width, height) * 0.42;
@@ -913,7 +932,25 @@ async function drawMap(options = {}) {
     listeners.push([el, ev, fn]);
   }
 
+  function zoomBy(factor) {
+    svg.interrupt();
+    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, factor);
+  }
+
   on(document.getElementById("search-box"), "input", debouncedSearch);
+  on(document.getElementById("search-box"), "keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const q = e.target.value.trim().toLowerCase();
+    if (!q) return;
+    const match =
+      nodes.find((n) => n.name.toLowerCase() === q) ||
+      nodes.find((n) => n.name.toLowerCase().includes(q));
+    if (match) {
+      document.getElementById("flt-linked-only").checked = false;
+      selectAndShow(match);
+    }
+  });
   on(document.getElementById("flt-running"), "change", () => applyFilters());
   on(document.getElementById("flt-stopped"), "change", () => applyFilters());
   on(document.getElementById("flt-external"), "change", () => applyFilters());
@@ -921,14 +958,11 @@ async function drawMap(options = {}) {
   on(document.getElementById("flt-cluster"), "change", updateClusterForce);
   on(document.getElementById("flt-prefix"), "input", debouncedPrefix);
   on(document.getElementById("btn-fit"), "click", () => fitToScreen(true));
-  on(document.getElementById("btn-zoom-in"), "click", () => {
-    svg.interrupt();
-    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 1.2);
-  });
-  on(document.getElementById("btn-zoom-out"), "click", () => {
-    svg.interrupt();
-    svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 0.84);
-  });
+  on(document.getElementById("btn-fit-float"), "click", () => fitToScreen(true));
+  on(document.getElementById("btn-zoom-in"), "click", () => zoomBy(1.2));
+  on(document.getElementById("btn-zoom-in-float"), "click", () => zoomBy(1.2));
+  on(document.getElementById("btn-zoom-out"), "click", () => zoomBy(0.84));
+  on(document.getElementById("btn-zoom-out-float"), "click", () => zoomBy(0.84));
   on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
     fittedOnce = false;
@@ -939,6 +973,7 @@ async function drawMap(options = {}) {
     persistPositions();
     softPoll({ forceFresh: true, allowRebuild: true });
   });
+  on(document.getElementById("btn-clear-selection"), "click", () => resetHighlight(true));
 
   const filtToggle = document.getElementById("btn-toggle-filters");
   on(filtToggle, "click", () => {
@@ -952,6 +987,13 @@ async function drawMap(options = {}) {
   on(backdrop, "click", () => closePanels());
 
   function onKey(e) {
+    const tag = (e.target && e.target.tagName) || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+    if (e.key === "/" && !typing) {
+      e.preventDefault();
+      document.getElementById("search-box")?.focus();
+      return;
+    }
     if (e.key === "Escape") {
       // Сначала полный сброс выделения (иначе на mobile Esc только закрывал панель)
       if (selectedNodes.size) {
@@ -960,6 +1002,12 @@ async function drawMap(options = {}) {
       }
       if (mapApp && mapApp.classList.contains("panel-open")) {
         closePanels();
+        return;
+      }
+      const search = document.getElementById("search-box");
+      if (search && search.value) {
+        search.value = "";
+        applyFilters({ refit: true });
       }
     }
   }

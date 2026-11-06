@@ -472,6 +472,51 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   font-size: 0.92rem;
 }
 .zoom-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.muted-hint {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.field-hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.side-fold {
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0 12px 10px;
+}
+.side-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 2px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+  user-select: none;
+}
+.side-fold > summary::-webkit-details-marker { display: none; }
+.side-fold > summary::after {
+  content: "▾";
+  float: right;
+  opacity: 0.6;
+}
+.side-fold[open] > summary::after { content: "▴"; }
+.side-fold .fold-sub {
+  margin: 12px 0 8px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+}
 .drawer-empty { color: var(--muted); font-size: 0.95rem; line-height: 1.55; }
 .drawer-kv { display: grid; gap: 10px; }
 .drawer-kv div {
@@ -482,11 +527,38 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
 }
 .drawer-kv dt { color: var(--muted); font-size: 0.72rem; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .drawer-kv dd { margin: 0; font-family: var(--mono); font-size: 0.84rem; word-break: break-all; color: var(--text); }
+.drawer-clear {
+  width: 100%;
+  margin-top: 12px;
+}
 
 .project-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-height: 140px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.map-float-tools {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.map-float-tools .btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 .project-chip {
   border: 1px solid var(--line);

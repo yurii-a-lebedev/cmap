@@ -27,60 +27,70 @@
     <button class="map-backdrop" type="button" id="map-backdrop" aria-label="Закрыть панель" hidden></button>
     <aside class="map-side" id="map-side">
       <div class="map-panel-head">
-        <strong class="map-panel-title">Панель</strong>
+        <strong class="map-panel-title">Фильтры</strong>
         <button class="btn map-panel-close" type="button" data-close-panel="filters" aria-label="Закрыть">✕</button>
       </div>
+
       <div class="block">
         <h3>Поиск</h3>
-        <input class="input" id="search-box" type="search" list="node-names" placeholder="Имя контейнера…">
+        <input class="input" id="search-box" type="search" list="node-names" placeholder="Имя контейнера… ↵" autocomplete="off">
         <datalist id="node-names"></datalist>
+        <p class="field-hint">Enter — выбрать · Esc — сброс · / — фокус в поиск</p>
       </div>
+
       <div class="block">
         <h3>Фильтры</h3>
         <div class="filter-row">
-          <label><input type="checkbox" id="flt-running" checked> Running</label>
-          <label><input type="checkbox" id="flt-stopped"> Stopped / другие</label>
-          <label><input type="checkbox" id="flt-external" checked> External</label>
+          <label><input type="checkbox" id="flt-running" checked> Запущенные</label>
+          <label><input type="checkbox" id="flt-stopped"> Остановленные</label>
+          <label><input type="checkbox" id="flt-external" checked> Внешние</label>
           <label><input type="checkbox" id="flt-linked-only" checked> Только со связями</label>
-          <label><input type="checkbox" id="flt-cluster" checked> Кластер по project</label>
+          <label><input type="checkbox" id="flt-cluster" checked> Кластер по проекту</label>
         </div>
         <input class="input" id="flt-prefix" style="margin-top:8px;width:100%" placeholder="Префикс / проект…">
       </div>
+
       <div class="block">
         <h3>Проекты</h3>
         <div class="project-chips" id="project-chips"></div>
       </div>
+
       <div class="block">
         <h3>Вид</h3>
         <div class="zoom-row">
-          <button class="btn" type="button" id="btn-fit" title="Вписать карту">Fit</button>
+          <button class="btn" type="button" id="btn-fit" title="Вписать всю карту">Вписать</button>
           <button class="btn" type="button" id="btn-zoom-in" title="Приблизить">+</button>
           <button class="btn" type="button" id="btn-zoom-out" title="Отдалить">−</button>
-          <button class="btn" type="button" id="btn-reset" title="Сбросить раскладку">Reset</button>
-          <button class="btn" type="button" id="btn-refresh" title="Обновить данные">Refresh</button>
+          <button class="btn" type="button" id="btn-reset" title="Сбросить позиции узлов">Сброс</button>
+          <button class="btn" type="button" id="btn-refresh" title="Обновить данные с Docker">Обновить</button>
         </div>
-        <div class="muted-hint" id="map-stats" style="margin-top:8px;color:var(--muted);font-size:0.82rem"></div>
-        <div class="muted-hint" id="map-updated" style="margin-top:4px;color:var(--muted);font-size:0.78rem"></div>
+        <div class="muted-hint" id="map-stats"></div>
+        <div class="muted-hint" id="map-updated"></div>
       </div>
-      <div class="block">
-        <h3>Без connect_to</h3>
-        <div class="muted-hint" id="coverage-summary" style="margin-bottom:8px;color:var(--muted);font-size:0.82rem"></div>
+
+      <details class="side-fold" open>
+        <summary>Без connect_to</summary>
+        <div class="muted-hint" id="coverage-summary"></div>
         <div class="coverage-list" id="coverage-list"></div>
-      </div>
-      <div class="block">
-        <h3>Статусы</h3>
+      </details>
+
+      <details class="side-fold">
+        <summary>Легенда</summary>
         <div class="legend-item"><span class="swatch" style="background:#5ecf8a"></span>running</div>
         <div class="legend-item"><span class="swatch" style="background:#e6a23c"></span>created</div>
         <div class="legend-item"><span class="swatch" style="background:#667384"></span>stopped</div>
         <div class="legend-item"><span class="swatch" style="background:#6aa8ff"></span>external</div>
-      </div>
-      <div class="block">
-        <h3>Порты связей</h3>
+        <h3 class="fold-sub">Порты связей</h3>
         <div id="port-legend"></div>
-      </div>
+      </details>
     </aside>
 
     <div class="map-canvas">
+      <div class="map-float-tools" aria-label="Управление картой">
+        <button class="btn" type="button" id="btn-fit-float" title="Вписать">⊡</button>
+        <button class="btn" type="button" id="btn-zoom-in-float" title="Приблизить">+</button>
+        <button class="btn" type="button" id="btn-zoom-out-float" title="Отдалить">−</button>
+      </div>
       <svg id="map-svg"></svg>
     </div>
 
@@ -89,8 +99,9 @@
         <h3>Узел</h3>
         <button class="btn map-panel-close" type="button" data-close-panel="drawer" aria-label="Закрыть">✕</button>
       </div>
-      <div class="drawer-empty" id="drawer-empty">Кликните контейнер на карте. Esc — сброс выделения.</div>
+      <div class="drawer-empty" id="drawer-empty">Кликните контейнер на карте или найдите через поиск. Клик по пустому месту / Esc — сброс.</div>
       <div class="drawer-kv" id="drawer-body" hidden></div>
+      <button class="btn drawer-clear" type="button" id="btn-clear-selection" hidden>Сбросить выделение</button>
     </aside>
   </div>
 
