@@ -1,4 +1,47 @@
-async function drawMap() {
+const POLL_MS = 20000;
+let mapController = null;
+
+function topologyKey(data) {
+  const nodePart = (data.nodes || [])
+    .map((n) => `${n.id}:${n.state}:${n.connect_to || ""}`)
+    .sort()
+    .join("|");
+  const linkPart = (data.links || [])
+    .map((l) => `${l.source}->${l.target}:${l.target_port}`)
+    .sort()
+    .join("|");
+  return `${nodePart}#${linkPart}`;
+}
+
+function formatUpdated(ts) {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  return `обновлено ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+}
+
+function clearMapUi() {
+  const svg = document.getElementById("map-svg");
+  if (svg) svg.innerHTML = "";
+  const datalist = document.getElementById("node-names");
+  if (datalist) datalist.innerHTML = "";
+  const chips = document.getElementById("project-chips");
+  if (chips) chips.innerHTML = "";
+  const portLegend = document.getElementById("port-legend");
+  if (portLegend) portLegend.innerHTML = "";
+  const coverage = document.getElementById("coverage-list");
+  if (coverage) coverage.innerHTML = "";
+}
+
+async function fetchMapData(fresh = false) {
+  const url = fresh ? "/containers_map?fresh=1" : "/containers_map";
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`containers_map ${res.status}`);
+  return res.json();
+}
+
+async function drawMap(options = {}) {
+  const { fresh = false, preserveNode = null } = options;
   const portColors = {
     80: "#4A90E2",
     443: "#5ecf8a",
@@ -31,9 +74,17 @@ async function drawMap() {
     53: "DNS",
   };
 
-  const data = await fetch("/containers_map").then((res) => res.json());
+  if (mapController) {
+    mapController.destroy();
+    mapController = null;
+  }
+  clearMapUi();
+
+  const data = await fetchMapData(fresh);
   let nodes = data.nodes.slice();
   const links = data.links;
+  const coverage = data.coverage || { without_connect_to: [], with_connect_to: 0, total: nodes.length };
+  const topo = topologyKey(data);
 
   const linkedIds = new Set();
   links.forEach((l) => {
@@ -51,9 +102,9 @@ async function drawMap() {
         image: "",
         status: "external service",
         project: "",
+        compose_service: "",
         connect_to: "",
         ports: [],
-        labels: {},
       });
     }
   });
@@ -82,6 +133,16 @@ async function drawMap() {
     portLegend.appendChild(item);
   });
 
+  const covSummary = document.getElementById("coverage-summary");
+  const covList = document.getElementById("coverage-list");
+  if (covSummary) {
+    const missing = (coverage.without_connect_to || []).length;
+    covSummary.textContent = `${coverage.with_connect_to || 0}/${coverage.total || nodes.length} с лейблом · без: ${missing}`;
+  }
+
+  const updatedEl = document.getElementById("map-updated");
+  if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
+
   const svgEl = document.getElementById("map-svg");
   const canvas = svgEl.parentElement;
   const mapApp = document.querySelector(".map-app");
@@ -92,6 +153,7 @@ async function drawMap() {
   let zoomBehavior;
   let fittedOnce = false;
   let layoutReady = false;
+  let destroyed = false;
 
   function isCompactMap() {
     return window.matchMedia("(max-width: 960px)").matches;
@@ -158,7 +220,6 @@ async function drawMap() {
     y: height * 0.12,
   };
 
-  // Стартовые координаты без жёсткой фиксации
   nodes.forEach((n, i) => {
     if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
       n.x = saved[n.id].x;
@@ -289,6 +350,7 @@ async function drawMap() {
       }
       highlightConnections();
       showDrawer(d);
+      setNodeQuery(d.name);
     });
 
   node.append("title").text((d) => d.name);
@@ -328,6 +390,7 @@ async function drawMap() {
   });
 
   simulation.on("tick", () => {
+    if (destroyed) return;
     link
       .attr("x1", (d) => d.source.x)
       .attr("y1", (d) => d.source.y)
@@ -356,11 +419,13 @@ async function drawMap() {
   }
 
   simulation.on("end", () => {
+    if (destroyed) return;
     pinLayout();
     layoutReady = true;
     if (!fittedOnce) {
       fittedOnce = true;
       fitToScreen(true);
+      focusFromQuery(preserveNode);
     }
   });
 
@@ -402,6 +467,37 @@ async function drawMap() {
     svg.transition().duration(500).ease(d3.easeCubicOut).call(zoomBehavior.transform, t);
   }
 
+  function selectAndShow(d) {
+    selectedNodes.clear();
+    selectedNodes.add(d);
+    highlightConnections();
+    showDrawer(d);
+    focusNode(d);
+    document.getElementById("flt-linked-only").checked = false;
+    applyFilters();
+    setNodeQuery(d.name);
+  }
+
+  function setNodeQuery(name) {
+    const url = new URL(window.location.href);
+    if (name) url.searchParams.set("node", name);
+    else url.searchParams.delete("node");
+    window.history.replaceState({}, "", url);
+  }
+
+  function focusFromQuery(forcedName) {
+    const params = new URLSearchParams(window.location.search);
+    const q = (forcedName || params.get("node") || "").trim().toLowerCase();
+    if (!q) return;
+    const match =
+      nodes.find((n) => n.name.toLowerCase() === q) ||
+      nodes.find((n) => n.name.toLowerCase().includes(q));
+    if (match) {
+      document.getElementById("search-box").value = match.name;
+      selectAndShow(match);
+    }
+  }
+
   function showDrawer(d) {
     const empty = document.getElementById("drawer-empty");
     const body = document.getElementById("drawer-body");
@@ -421,6 +517,7 @@ async function drawMap() {
       <div><dt>Хост</dt><dd>${escapeHtml(d.host || "—")}</dd></div>
       <div><dt>Образ</dt><dd>${escapeHtml(d.image || "—")}</dd></div>
       <div><dt>Проект</dt><dd>${escapeHtml(d.project || "—")}</dd></div>
+      <div><dt>compose service</dt><dd>${escapeHtml(d.compose_service || "—")}</dd></div>
       <div><dt>Порты</dt><dd>${escapeHtml(ports)}</dd></div>
       <div><dt>connect_to</dt><dd>${escapeHtml(d.connect_to || "—")}</dd></div>
     `;
@@ -477,7 +574,10 @@ async function drawMap() {
       .attr("opacity", 1);
     linkLabels.style("visibility", "hidden");
     clearDrawer();
-    if (clearSearch) document.getElementById("search-box").value = "";
+    if (clearSearch) {
+      document.getElementById("search-box").value = "";
+      setNodeQuery("");
+    }
     applyFilters();
   }
 
@@ -601,6 +701,26 @@ async function drawMap() {
       });
   }
 
+  if (covList) {
+    (coverage.without_connect_to || []).forEach((item) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "coverage-item";
+      btn.innerHTML = `${escapeHtml(item.name)}${
+        item.project ? `<small>${escapeHtml(item.project)}</small>` : ""
+      }`;
+      btn.addEventListener("click", () => {
+        const n = nodes.find((x) => x.id === item.id || x.name === item.name);
+        if (!n) return;
+        document.getElementById("flt-linked-only").checked = false;
+        document.getElementById("search-box").value = n.name;
+        applyFilters();
+        selectAndShow(n);
+      });
+      covList.appendChild(btn);
+    });
+  }
+
   const chips = document.getElementById("project-chips");
   function setProjectFilter(project) {
     activeProject = project;
@@ -659,42 +779,53 @@ async function drawMap() {
   }
   const debouncedResize = debounce(resizeMap, 180);
 
-  document.getElementById("search-box").addEventListener("input", debouncedSearch);
-  document.getElementById("flt-running").addEventListener("change", () => applyFilters());
-  document.getElementById("flt-stopped").addEventListener("change", () => applyFilters());
-  document.getElementById("flt-external").addEventListener("change", () => applyFilters());
-  document.getElementById("flt-linked-only").addEventListener("change", () => applyFilters({ refit: true }));
-  document.getElementById("flt-cluster").addEventListener("change", updateClusterForce);
-  document.getElementById("flt-prefix").addEventListener("input", debouncedPrefix);
-  document.getElementById("btn-fit").addEventListener("click", () => fitToScreen(true));
-  document.getElementById("btn-zoom-in").addEventListener("click", () => {
+  const listeners = [];
+  function on(el, ev, fn) {
+    if (!el) return;
+    el.addEventListener(ev, fn);
+    listeners.push([el, ev, fn]);
+  }
+
+  on(document.getElementById("search-box"), "input", debouncedSearch);
+  on(document.getElementById("flt-running"), "change", () => applyFilters());
+  on(document.getElementById("flt-stopped"), "change", () => applyFilters());
+  on(document.getElementById("flt-external"), "change", () => applyFilters());
+  on(document.getElementById("flt-linked-only"), "change", () => applyFilters({ refit: true }));
+  on(document.getElementById("flt-cluster"), "change", updateClusterForce);
+  on(document.getElementById("flt-prefix"), "input", debouncedPrefix);
+  on(document.getElementById("btn-fit"), "click", () => fitToScreen(true));
+  on(document.getElementById("btn-zoom-in"), "click", () => {
     svg.interrupt();
     svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 1.2);
   });
-  document.getElementById("btn-zoom-out").addEventListener("click", () => {
+  on(document.getElementById("btn-zoom-out"), "click", () => {
     svg.interrupt();
     svg.transition().duration(220).ease(d3.easeCubicOut).call(zoomBehavior.scaleBy, 0.84);
   });
-  document.getElementById("btn-reset").addEventListener("click", () => {
+  on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
     fittedOnce = false;
     unpinLayout();
     simulation.alpha(0.6).restart();
     resetHighlight(true);
   });
-  const filtToggle = document.getElementById("btn-toggle-filters");
-  if (filtToggle) {
-    filtToggle.addEventListener("click", () => {
-      if (!mapApp) return;
-      if (mapApp.classList.contains("filters-open")) closePanels();
-      else openFilters();
-    });
-  }
-  document.querySelectorAll("[data-close-panel]").forEach((btn) => {
-    btn.addEventListener("click", () => closePanels());
+  on(document.getElementById("btn-refresh"), "click", () => {
+    const keep = new URLSearchParams(window.location.search).get("node");
+    drawMap({ fresh: true, preserveNode: keep });
   });
-  if (backdrop) backdrop.addEventListener("click", () => closePanels());
-  window.addEventListener("keydown", (e) => {
+
+  const filtToggle = document.getElementById("btn-toggle-filters");
+  on(filtToggle, "click", () => {
+    if (!mapApp) return;
+    if (mapApp.classList.contains("filters-open")) closePanels();
+    else openFilters();
+  });
+  document.querySelectorAll("[data-close-panel]").forEach((btn) => {
+    on(btn, "click", () => closePanels());
+  });
+  on(backdrop, "click", () => closePanels());
+
+  function onKey(e) {
     if (e.key === "Escape") {
       if (mapApp && mapApp.classList.contains("panel-open")) {
         closePanels();
@@ -702,13 +833,39 @@ async function drawMap() {
       }
       resetHighlight(true);
     }
-  });
-  window.addEventListener("resize", debouncedResize);
+  }
+  on(window, "keydown", onKey);
+  on(window, "resize", debouncedResize);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", debouncedResize);
+    on(window.visualViewport, "resize", debouncedResize);
   }
 
   applyFilters();
+
+  mapController = {
+    topologyKey: topo,
+    destroy() {
+      destroyed = true;
+      simulation.stop();
+      listeners.forEach(([el, ev, fn]) => el.removeEventListener(ev, fn));
+    },
+  };
 }
 
-drawMap();
+async function softPoll() {
+  try {
+    const data = await fetchMapData(false);
+    const next = topologyKey(data);
+    const updatedEl = document.getElementById("map-updated");
+    if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
+    if (!mapController || next === mapController.topologyKey) return;
+    const keep = new URLSearchParams(window.location.search).get("node");
+    await drawMap({ fresh: false, preserveNode: keep });
+  } catch (e) {
+    console.warn("cmap poll failed", e);
+  }
+}
+
+drawMap().then(() => {
+  setInterval(softPoll, POLL_MS);
+});

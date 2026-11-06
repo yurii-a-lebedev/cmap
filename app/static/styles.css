@@ -506,6 +506,45 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   font-weight: 600;
 }
 
+.coverage-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+.coverage-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.coverage-item:hover {
+  border-color: var(--line-strong);
+  background: var(--bg-soft);
+}
+.coverage-item small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-top: 2px;
+}
+a.row-map-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+a.row-map-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .node-circle { transition: opacity 0.25s ease, stroke 0.2s ease, stroke-width 0.2s ease; }
 .link-line { transition: opacity 0.25s ease, stroke 0.2s ease; }
 .nav a, .btn, .project-chip, .chip {

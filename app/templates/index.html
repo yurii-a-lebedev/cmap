@@ -75,7 +75,7 @@
               <tbody class="rows-running">
                 {% for c in data.running %}
                 <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="running">
-                  <td>{{ c.name }}</td>
+                  <td><a class="row-map-link" href="/map?node={{ c.name|urlencode }}">{{ c.name }}</a></td>
                   <td><span class="badge" style="color:var(--ok)">running</span></td>
                   <td>{% if c.host_port != 'N/A' %}{{ c.host_port }}→{{ c.container_port }}{% elif c.container_port != 'N/A' %}:{{ c.container_port }}{% else %}—{% endif %}</td>
                   <td>{{ c.uptime }}</td>
@@ -96,7 +96,7 @@
               <tbody class="rows-stopped">
                 {% for c in data.stopped %}
                 <tr data-name="{{ c.name|lower }}" data-image="{{ c.image|lower }}" data-state="stopped">
-                  <td>{{ c.name }}</td>
+                  <td><a class="row-map-link" href="/map?node={{ c.name|urlencode }}">{{ c.name }}</a></td>
                   <td><span class="badge" style="color:var(--warn)">stopped</span></td>
                   <td>{% if c.host_port != 'N/A' %}{{ c.host_port }}→{{ c.container_port }}{% elif c.container_port != 'N/A' %}:{{ c.container_port }}{% else %}—{% endif %}</td>
                   <td>{{ c.uptime }}</td>

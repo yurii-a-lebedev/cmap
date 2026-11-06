@@ -13,9 +13,11 @@
 
 ## UI
 
-- **Контейнеры** — список, поиск, фильтр running/stopped
-- **Карта** — по умолчанию только узлы со связями, кластер по compose `project`, чипы проектов, Fit/zoom, сайдбар узла
+- **Контейнеры** — список, поиск, фильтр running/stopped; клик по имени → `/map?node=…`
+- **Карта** — по умолчанию узлы со связями, кластер по compose `project`, чипы проектов, Fit/zoom/Refresh, блок «без connect_to», poll ~20с, сайдбар узла
 - **Хосты** — `localhost` через docker.sock, удаление localhost запрещено
+
+Связи резолвятся по имени контейнера, compose service (+ project) и fuzzy-имени.
 
 ## Запуск
 
@@ -31,7 +33,7 @@ docker logs cmap --tail 50
 ```bash
 curl -sk -o /dev/null -w "%{http_code}\n" \
   --resolve cmap.main.tx0.ru:443:192.168.100.200 \
-  https://cmap.main.tx0.ru/
+  https://cmap.main.tx0.ru/healthz
 ```
 
 ## Деплой

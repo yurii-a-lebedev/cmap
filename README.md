@@ -1,88 +1,41 @@
+# CMAP
 
-CMAP (Container Mapping and Analysis Platform) — это веб-приложение, предназначенное для визуализации инфраструктуры Docker-контейнеров. Оно предоставляет удобный интерфейс визуализации взаимосвязей между контейнерами.
+Container Mapping and Analysis Platform — карта Docker-контейнеров и связей по лейблу `connect_to`.
 
-![Скриншот главной страницы](images/main_page.png)
+| | |
+|---|---|
+| Веб | `https://cmap.main.tx0.ru` |
+| Инструкция | [INSTRUCTION.md](INSTRUCTION.md) |
+| Репозиторий | `https://gitlab.main.tx0.ru/lebedev/cmap` |
 
-![Скриншот управления хостами](images/manage_hosts_page.png)
+## Возможности
 
-### Основные возможности:
-- **Интерактивная карта**: отображение контейнеров и их связей (включая взаимодействия с внешними сервисами).
+- **Контейнеры** — список по хостам, поиск, фильтр running/stopped; имя ведёт на `/map?node=…`
+- **Карта** — D3-граф, кластер по compose `project`, фильтры, Fit/zoom, покрытие без `connect_to`, auto-refresh ~20с
+- **Хосты** — `localhost` через docker.sock; удаление localhost запрещено
 
-- **Визуализация связей**: основана на использовании лейблов `connect_to` в Docker-контейнерах для обозначения логических связей.
+## Лейбл `connect_to`
 
-- **Поле поиска узлов на карте**: позволяет пользователю искать контейнеры по именам, по мере ввода текста происходит подсветка найденных узлов красным цветом.
+Формат: `service:port` (несколько через запятую).
 
-![Скриншот карты, поиск контейнера](images/main_select_link_search.png)
+Резолв цели (по порядку): точное имя контейнера → `com.docker.compose.service` в том же project → уникальный service → fuzzy по имени.
 
-### Что такое `connect_to`?
-Лейбл `connect_to` — это метка, добавляемая к Docker-контейнеру, указывающая его связи с другими контейнерами или внешними сервисами. Она используется для визуализации связей на карте инфраструктуры CMAP.
-
-#### Формат лейбла `connect_to`:
-Лейбл записывается в формате `service_name:port`, где:
-- `service_name` — имя целевого сервиса или контейнера.
-- `port` — порт целевого сервиса.
-
-Если требуется указать несколько связей, их можно перечислить через запятую:
+```yaml
+services:
+  app:
+    image: my-image
+    labels:
+      connect_to: "db:5432,redis:6379"
 ```
-connect_to=db-service:80,external-service:8080
+
+```bash
+docker run -d --name my-app --label connect_to=db:5432 my-image
 ```
 
-#### Настройка `connect_to`:
-1. **При запуске контейнера**:
-   ```bash
-   docker run -d \
-     --name my-container \
-     --label connect_to=db-service:5432,auth-service:8080 \
-     my-image
-   ```
-2. **Через `docker-compose.yml`**:
-   ```yaml
-   version: '3.8'
-   services:
-     app:
-       image: my-image
-     labels:
-       connect_to: "db-service:5432,auth-server:8080"
-   ```
+## Удалённые Docker-хосты
 
-### Для работы карты используется порт на удалённом хосте
-Для обеспечения корректной работы CMAP и связи с удалёнными Docker-хостами, порт, указанный для доступа к API Docker `2375`, должен быть открыт на удалённом хосте. Это позволяет приложению взаимодействовать с Docker Engine.
+Для LAN предпочтительнее TLS или доступ через SSH/docker context. Открытый TCP `2375` без TLS — риск; используйте только в доверенной сети и за firewall.
 
-#### Пример настройки:
-- Для открытия порта `2375` на удалённом хосте убедитесь, что:
-  - Включён удалённый доступ к Docker Daemon.
-  - В файле `/etc/docker/daemon.json` добавлено:
-    ```json
-    {
-      "hosts": ["tcp://0.0.0.0:2375", "unix:///var/run/docker.sock"]
-    }
-    ```
-  - Выполнена перезагрузка Docker:
-    ```bash
-    systemctl daemon-reload
-    systemctl restart docker
+## Запуск
 
-    ```
-
-#### Для выгрузки приложения через gitlab-runner: 
-  - Для деплоя на виртуальной машине не забываем править права 
-    ```bash
-    sudo chown -R gitlab-runner:gitlab-runner /data/config/cmap
-    sudo chmod -R 755 /data/config/cmap
-    ```
-Настроить sudo без пароля для пользователя Runner
-
-  - Откройте файл конфигурации sudoers:
-    ```bash
-    sudo visudo
-    ```
-
-  - Добавьте следующую строку:
-    ```bash
-    gitlab-runner ALL=(ALL) NOPASSWD: ALL
-    ```
-    
-Это позволит пользователю gitlab-runner выполнять команды sudo без запроса пароля.
-
-
-
+См. [INSTRUCTION.md](INSTRUCTION.md). Healthcheck: `GET /healthz`.
