@@ -154,6 +154,8 @@ async function drawMap(options = {}) {
   let fittedOnce = false;
   let layoutReady = false;
   let destroyed = false;
+  // Снимок фильтров до временного раскрытия при фокусе на узле
+  let filterSnapshot = null;
 
   function isCompactMap() {
     return window.matchMedia("(max-width: 960px)").matches;
@@ -343,11 +345,12 @@ async function drawMap(options = {}) {
     .call(drag(simulation))
     .on("click", (event, d) => {
       event.stopPropagation();
-      if (selectedNodes.has(d)) selectedNodes.delete(d);
-      else {
-        selectedNodes.clear();
-        selectedNodes.add(d);
+      if (selectedNodes.has(d) && selectedNodes.size === 1) {
+        resetHighlight(true);
+        return;
       }
+      selectedNodes.clear();
+      selectedNodes.add(d);
       highlightConnections();
       showDrawer(d);
       setNodeQuery(d.name);
@@ -467,15 +470,30 @@ async function drawMap(options = {}) {
     svg.transition().duration(500).ease(d3.easeCubicOut).call(zoomBehavior.transform, t);
   }
 
-  function selectAndShow(d) {
+  function beginSelectionFocus(d, { zoom = true } = {}) {
+    const linkedEl = document.getElementById("flt-linked-only");
+    const searchEl = document.getElementById("search-box");
+    if (!filterSnapshot) {
+      filterSnapshot = {
+        linkedOnly: linkedEl.checked,
+        search: searchEl.value,
+      };
+    }
+    // Временно показать узел и соседей, не ломая исходные чекбоксы навсегда
+    if (linkedEl.checked && !linkedIds.has(d.id)) {
+      linkedEl.checked = false;
+    }
     selectedNodes.clear();
     selectedNodes.add(d);
+    applyFilters();
     highlightConnections();
     showDrawer(d);
-    focusNode(d);
-    document.getElementById("flt-linked-only").checked = false;
-    applyFilters();
+    if (zoom) focusNode(d);
     setNodeQuery(d.name);
+  }
+
+  function selectAndShow(d) {
+    beginSelectionFocus(d, { zoom: true });
   }
 
   function setNodeQuery(name) {
@@ -492,10 +510,21 @@ async function drawMap(options = {}) {
     const match =
       nodes.find((n) => n.name.toLowerCase() === q) ||
       nodes.find((n) => n.name.toLowerCase().includes(q));
-    if (match) {
-      document.getElementById("search-box").value = match.name;
-      selectAndShow(match);
-    }
+    if (match) selectAndShow(match);
+  }
+
+  function selectionNeighborhood() {
+    const ids = new Set();
+    selectedNodes.forEach((sel) => {
+      ids.add(sel.id);
+      links.forEach((link) => {
+        const s = link.source.id ?? link.source;
+        const t = link.target.id ?? link.target;
+        if (s === sel.id) ids.add(t);
+        if (t === sel.id) ids.add(s);
+      });
+    });
+    return ids;
   }
 
   function showDrawer(d) {
@@ -538,9 +567,19 @@ async function drawMap(options = {}) {
   }
 
   function highlightConnections() {
+    if (!selectedNodes.size) {
+      node.selectAll("circle").attr("opacity", 1);
+      link
+        .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
+        .attr("opacity", 1);
+      linkLabels.style("visibility", "hidden");
+      return;
+    }
+
     const connectedLinks = new Set();
     const connectedNodes = new Set();
     selectedNodes.forEach((selected) => {
+      connectedNodes.add(selected);
       links.forEach((link) => {
         if (link.source.id === selected.id || link.target.id === selected.id) {
           connectedLinks.add(link);
@@ -550,35 +589,44 @@ async function drawMap(options = {}) {
       });
     });
 
-    if (!selectedNodes.size) {
-      resetHighlight(false);
-      return;
-    }
-
     link
       .attr("stroke", (d) =>
-        connectedLinks.has(d) ? portColors[parseInt(d.target_port, 10)] || "#fff" : "#333"
+        connectedLinks.has(d) ? portColors[parseInt(d.target_port, 10)] || "#666" : "#c8d0dc"
       )
       .attr("opacity", (d) => (connectedLinks.has(d) ? 1 : 0.12));
     linkLabels.style("visibility", (d) => (connectedLinks.has(d) ? "visible" : "hidden"));
     node
       .selectAll("circle")
-      .attr("opacity", (d) => (connectedNodes.has(d) || selectedNodes.has(d) ? 1 : 0.15));
+      .attr("opacity", (d) => (connectedNodes.has(d) ? 1 : 0.15));
   }
 
   function resetHighlight(clearSearch = true) {
     selectedNodes.clear();
-    node.selectAll("circle").attr("opacity", 1).attr("fill", nodeColor);
+    node
+      .selectAll("circle")
+      .attr("opacity", 1)
+      .attr("fill", nodeColor)
+      .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
+      .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
     link
       .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
       .attr("opacity", 1);
     linkLabels.style("visibility", "hidden");
     clearDrawer();
-    if (clearSearch) {
+
+    if (filterSnapshot) {
+      document.getElementById("flt-linked-only").checked = filterSnapshot.linkedOnly;
+      if (clearSearch) {
+        document.getElementById("search-box").value = filterSnapshot.search || "";
+      }
+      filterSnapshot = null;
+    } else if (clearSearch) {
       document.getElementById("search-box").value = "";
-      setNodeQuery("");
     }
-    applyFilters();
+    if (clearSearch) setNodeQuery("");
+
+    applyFilters({ refit: clearSearch });
+    if (clearSearch && layoutReady) fitToScreen(true);
   }
 
   function applyFilters({ refit = false } = {}) {
@@ -588,9 +636,14 @@ async function drawMap(options = {}) {
     const showExternal = document.getElementById("flt-external").checked;
     const linkedOnly = document.getElementById("flt-linked-only").checked;
     const prefix = document.getElementById("flt-prefix").value.trim().toLowerCase();
+    const keepIds = selectedNodes.size ? selectionNeighborhood() : null;
 
     const visible = new Set();
     nodes.forEach((d) => {
+      if (keepIds && keepIds.has(d.id)) {
+        visible.add(d.id);
+        return;
+      }
       const isExt = d.state === "external";
       const isRun = d.state === "running";
       const isStop = !isExt && !isRun;
@@ -606,7 +659,7 @@ async function drawMap(options = {}) {
         !(d.project || "").toLowerCase().includes(prefix)
       )
         ok = false;
-      if (q && !(d.name || "").toLowerCase().includes(q)) ok = false;
+      // Поиск подсвечивает, но не прячет остальных — иначе ломается подсветка связей
       if (ok) visible.add(d.id);
     });
 
@@ -621,7 +674,7 @@ async function drawMap(options = {}) {
       stats.textContent = `На карте: ${visibleNodes.length} узлов · ${links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length} связей`;
     }
 
-    if (q) {
+    if (q && !selectedNodes.size) {
       const matches = visibleNodes.filter((d) => d.name.toLowerCase().includes(q));
       node
         .selectAll("circle")
@@ -630,12 +683,11 @@ async function drawMap(options = {}) {
         )
         .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2 : 1.25));
       if (matches.length === 1) {
-        focusNode(matches[0]);
-        showDrawer(matches[0]);
-      } else if (matches.length > 1) {
+        beginSelectionFocus(matches[0], { zoom: true });
+      } else if (matches.length > 1 && refit) {
         fitToNodes(matches, true);
       }
-    } else {
+    } else if (!selectedNodes.size) {
       node
         .selectAll("circle")
         .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
@@ -643,6 +695,8 @@ async function drawMap(options = {}) {
       if (refit && layoutReady && visibleNodes.length) {
         fitToNodes(visibleNodes, true);
       }
+    } else {
+      highlightConnections();
     }
   }
 
@@ -712,9 +766,6 @@ async function drawMap(options = {}) {
       btn.addEventListener("click", () => {
         const n = nodes.find((x) => x.id === item.id || x.name === item.name);
         if (!n) return;
-        document.getElementById("flt-linked-only").checked = false;
-        document.getElementById("search-box").value = n.name;
-        applyFilters();
         selectAndShow(n);
       });
       covList.appendChild(btn);
