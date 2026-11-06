@@ -1,9 +1,11 @@
 const POLL_MS = 20000;
+const STORAGE_KEY = "cmap-node-positions-v5";
 let mapController = null;
 
-function topologyKey(data) {
+/** Только структура графа — без state, иначе poll каждые 20с ломает раскладку. */
+function structureKey(data) {
   const nodePart = (data.nodes || [])
-    .map((n) => `${n.id}:${n.state}:${n.connect_to || ""}`)
+    .map((n) => `${n.id}:${n.connect_to || ""}`)
     .sort()
     .join("|");
   const linkPart = (data.links || [])
@@ -11,6 +13,27 @@ function topologyKey(data) {
     .sort()
     .join("|");
   return `${nodePart}#${linkPart}`;
+}
+
+function loadSavedPositions() {
+  try {
+    const raw =
+      localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem("cmap-node-positions-v4") ||
+      localStorage.getItem("cmap-node-positions-v3") ||
+      "{}";
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function savePositions(nodes) {
+  const out = {};
+  nodes.forEach((n) => {
+    if (Number.isFinite(n.x) && Number.isFinite(n.y)) out[n.id] = { x: n.x, y: n.y };
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
 }
 
 function formatUpdated(ts) {
@@ -75,6 +98,7 @@ async function drawMap(options = {}) {
   };
 
   if (mapController) {
+    mapController.persist?.();
     mapController.destroy();
     mapController = null;
   }
@@ -84,7 +108,7 @@ async function drawMap(options = {}) {
   let nodes = data.nodes.slice();
   const links = data.links;
   const coverage = data.coverage || { without_connect_to: [], with_connect_to: 0, total: nodes.length };
-  const topo = topologyKey(data);
+  const topo = structureKey(data);
 
   const linkedIds = new Set();
   links.forEach((l) => {
@@ -195,15 +219,8 @@ async function drawMap(options = {}) {
     syncPanelState();
   }
 
-  const STORAGE_KEY = "cmap-node-positions-v5";
   let activeProject = "";
-  const saved = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  })();
+  const saved = loadSavedPositions();
 
   const projectNames = [
     ...new Set(nodes.map((n) => n.project).filter(Boolean)),
@@ -223,14 +240,16 @@ async function drawMap(options = {}) {
     y: height * 0.1,
   };
 
+  let restoredCount = 0;
   nodes.forEach((n, i) => {
     if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
       n.x = saved[n.id].x;
       n.y = saved[n.id].y;
+      restoredCount += 1;
     } else {
       const key = n.state === "external" ? "external" : n.project || "_none";
       const c = projectCenters[key] || projectCenters._none;
-      const angle = (i / nodes.length) * Math.PI * 2;
+      const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
       n.x = c.x + Math.cos(angle) * 40;
       n.y = c.y + Math.sin(angle) * 40;
     }
@@ -294,6 +313,11 @@ async function drawMap(options = {}) {
     .velocityDecay(0.55)
     .alphaDecay(0.012)
     .alphaMin(0.0008);
+
+  // Если раскладка уже сохранена — не взрывать граф с alpha=1
+  if (restoredCount >= Math.max(3, nodes.length * 0.35)) {
+    simulation.alpha(0.04);
+  }
 
   const link = g
     .append("g")
@@ -454,11 +478,7 @@ async function drawMap(options = {}) {
   }
 
   function persistPositions() {
-    const out = {};
-    nodes.forEach((n) => {
-      if (Number.isFinite(n.x) && Number.isFinite(n.y)) out[n.id] = { x: n.x, y: n.y };
-    });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    savePositions(nodes);
   }
 
   function fitToScreen(animate = true) {
@@ -871,8 +891,8 @@ async function drawMap(options = {}) {
     resetHighlight(true);
   });
   on(document.getElementById("btn-refresh"), "click", () => {
-    const keep = new URLSearchParams(window.location.search).get("node");
-    drawMap({ fresh: true, preserveNode: keep });
+    persistPositions();
+    softPoll({ forceFresh: true, allowRebuild: true });
   });
 
   const filtToggle = document.getElementById("btn-toggle-filters");
@@ -906,30 +926,76 @@ async function drawMap(options = {}) {
 
   applyFilters();
 
+  function applyLiveUpdate(data) {
+    const byId = new Map((data.nodes || []).map((n) => [n.id, n]));
+    nodes.forEach((n) => {
+      if (n.state === "external") return;
+      const u = byId.get(n.id);
+      if (!u) return;
+      n.state = u.state;
+      n.status = u.status;
+      n.image = u.image;
+      n.connect_to = u.connect_to;
+      n.ports = u.ports;
+      n.project = u.project;
+      n.compose_service = u.compose_service;
+      n.host = u.host;
+    });
+    node.selectAll("circle").attr("fill", nodeColor);
+    node.select("title").text((d) => d.name);
+
+    const cov = data.coverage || {};
+    const covSummary = document.getElementById("coverage-summary");
+    if (covSummary) {
+      const missing = (cov.without_connect_to || []).length;
+      covSummary.textContent = `${cov.with_connect_to || 0}/${cov.total || nodes.length} с лейблом · без: ${missing}`;
+    }
+    const updatedEl = document.getElementById("map-updated");
+    if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
+    applyFilters();
+  }
+
   mapController = {
-    topologyKey: topo,
+    structureKey: topo,
+    persist: persistPositions,
+    applyLiveUpdate,
     destroy() {
       destroyed = true;
+      persistPositions();
       simulation.stop();
       listeners.forEach(([el, ev, fn]) => el.removeEventListener(ev, fn));
     },
   };
 }
 
-async function softPoll() {
+async function softPoll({ forceFresh = false, allowRebuild = false } = {}) {
   try {
-    const data = await fetchMapData(false);
-    const next = topologyKey(data);
+    if (mapController?.persist) mapController.persist();
+    const data = await fetchMapData(forceFresh);
     const updatedEl = document.getElementById("map-updated");
     if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
-    if (!mapController || next === mapController.topologyKey) return;
+    if (!mapController) return;
+
+    const next = structureKey(data);
+    if (next === mapController.structureKey) {
+      mapController.applyLiveUpdate?.(data);
+      return;
+    }
+    // Структура изменилась — пересобираем, позиции уже в localStorage
+    if (!allowRebuild && !forceFresh) {
+      // На обычном poll тоже пересоберём, но со сохранённой раскладкой
+    }
     const keep = new URLSearchParams(window.location.search).get("node");
-    await drawMap({ fresh: false, preserveNode: keep });
+    await drawMap({ fresh: forceFresh, preserveNode: keep });
   } catch (e) {
     console.warn("cmap poll failed", e);
   }
 }
 
 drawMap().then(() => {
-  setInterval(softPoll, POLL_MS);
+  setInterval(() => softPoll(), POLL_MS);
+  window.addEventListener("beforeunload", () => mapController?.persist?.());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") mapController?.persist?.();
+  });
 });
