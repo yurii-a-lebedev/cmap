@@ -556,7 +556,7 @@ async function drawMap(options = {}) {
   function clearDrawer() {
     document.getElementById("drawer-empty").hidden = false;
     document.getElementById("drawer-body").hidden = true;
-    if (isCompactMap()) closePanels();
+    closePanels();
   }
 
   function escapeHtml(s) {
@@ -878,11 +878,14 @@ async function drawMap(options = {}) {
 
   function onKey(e) {
     if (e.key === "Escape") {
-      if (mapApp && mapApp.classList.contains("panel-open")) {
-        closePanels();
+      // Сначала полный сброс выделения (иначе на mobile Esc только закрывал панель)
+      if (selectedNodes.size) {
+        resetHighlight(true);
         return;
       }
-      resetHighlight(true);
+      if (mapApp && mapApp.classList.contains("panel-open")) {
+        closePanels();
+      }
     }
   }
   on(window, "keydown", onKey);
