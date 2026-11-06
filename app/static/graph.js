@@ -195,7 +195,7 @@ async function drawMap(options = {}) {
     syncPanelState();
   }
 
-  const STORAGE_KEY = "cmap-node-positions-v4";
+  const STORAGE_KEY = "cmap-node-positions-v5";
   let activeProject = "";
   const saved = (() => {
     try {
@@ -209,17 +209,18 @@ async function drawMap(options = {}) {
     ...new Set(nodes.map((n) => n.project).filter(Boolean)),
   ].sort();
   const projectCenters = {};
+  const spread = Math.min(width, height) * 0.42;
   projectNames.forEach((p, i) => {
     const angle = (i / Math.max(projectNames.length, 1)) * Math.PI * 2;
     projectCenters[p] = {
-      x: width / 2 + Math.cos(angle) * Math.min(width, height) * 0.32,
-      y: height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28,
+      x: width / 2 + Math.cos(angle) * spread,
+      y: height / 2 + Math.sin(angle) * spread * 0.88,
     };
   });
   projectCenters._none = { x: width / 2, y: height / 2 };
   projectCenters.external = {
     x: width / 2,
-    y: height * 0.12,
+    y: height * 0.1,
   };
 
   nodes.forEach((n, i) => {
@@ -246,8 +247,9 @@ async function drawMap(options = {}) {
     });
   svg.call(zoomBehavior);
 
+  // Osmos-like: слабые пружины, сильное отталкивание, вязкая среда
   function clusterStrength() {
-    return document.getElementById("flt-cluster").checked ? 0.45 : 0.03;
+    return document.getElementById("flt-cluster").checked ? 0.12 : 0.015;
   }
 
   const simulation = d3
@@ -257,12 +259,20 @@ async function drawMap(options = {}) {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance(180)
-        .strength(0.45)
+        .distance(260)
+        .strength(0.12)
     )
-    .force("charge", d3.forceManyBody().strength(-520))
-    .force("collide", d3.forceCollide().radius(56).strength(0.9))
-    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force(
+      "charge",
+      d3
+        .forceManyBody()
+        .strength(-920)
+        .distanceMin(40)
+        .distanceMax(720)
+    )
+    .force("collide", d3.forceCollide().radius(72).strength(0.45).iterations(2))
+    .force("centerX", d3.forceX(width / 2).strength(0.018))
+    .force("centerY", d3.forceY(height / 2).strength(0.018))
     .force(
       "x",
       d3
@@ -281,9 +291,9 @@ async function drawMap(options = {}) {
         })
         .strength(clusterStrength)
     )
-    .velocityDecay(0.35)
-    .alphaDecay(0.022)
-    .alphaMin(0.001);
+    .velocityDecay(0.55)
+    .alphaDecay(0.012)
+    .alphaMin(0.0008);
 
   const link = g
     .append("g")
@@ -291,8 +301,9 @@ async function drawMap(options = {}) {
     .data(links)
     .join("line")
     .attr("class", "link-line")
-    .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
-    .attr("stroke-width", 1.6);
+    .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#9aa6b5")
+    .attr("stroke-width", 1.25)
+    .attr("stroke-opacity", 0.55);
 
   const linkLabels = g
     .append("g")
@@ -413,9 +424,9 @@ async function drawMap(options = {}) {
     });
   }
 
-  function reheat(alpha = 0.35) {
+  function reheat(alpha = 0.2) {
     unpinLayout();
-    simulation.alpha(alpha).restart();
+    simulation.alpha(Math.min(alpha, 0.35)).restart();
   }
 
   simulation.on("end", () => {
@@ -702,7 +713,7 @@ async function drawMap(options = {}) {
     simulation.force("x").strength(clusterStrength);
     simulation.force("y").strength(clusterStrength);
     fittedOnce = false;
-    reheat(0.45);
+    reheat(0.22);
   }
 
   function fitToNodes(subset, animate = true) {
@@ -736,7 +747,7 @@ async function drawMap(options = {}) {
     return d3
       .drag()
       .on("start", (event) => {
-        if (!event.active) sim.alphaTarget(0.18).restart();
+        if (!event.active) sim.alphaTarget(0.06).restart();
         event.subject.fx = event.subject.x;
         event.subject.fy = event.subject.y;
       })
@@ -748,8 +759,8 @@ async function drawMap(options = {}) {
         event.subject.fx = null;
         event.subject.fy = null;
         if (!event.active) sim.alphaTarget(0);
-        // Отпустили узел — симуляция снова расправляет соседей
-        sim.alpha(Math.max(sim.alpha(), 0.25)).restart();
+        // Мягкий «выдох» после отпускания — без рывка
+        sim.alpha(Math.max(sim.alpha(), 0.08)).restart();
         persistPositions();
       });
   }
@@ -780,7 +791,7 @@ async function drawMap(options = {}) {
     });
     applyFilters({ refit: true });
     fittedOnce = false;
-    reheat(0.4);
+    reheat(0.2);
   }
   const allChip = document.createElement("button");
   allChip.type = "button";
@@ -810,17 +821,19 @@ async function drawMap(options = {}) {
     width = nextW;
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
-    simulation.force("center", d3.forceCenter(width / 2, height / 2));
+    simulation.force("centerX", d3.forceX(width / 2).strength(0.018));
+    simulation.force("centerY", d3.forceY(height / 2).strength(0.018));
+    const rSpread = Math.min(width, height) * 0.42;
     Object.keys(projectCenters).forEach((key, i, arr) => {
       if (key === "_none") {
         projectCenters[key] = { x: width / 2, y: height / 2 };
       } else if (key === "external") {
-        projectCenters[key] = { x: width / 2, y: height * 0.12 };
+        projectCenters[key] = { x: width / 2, y: height * 0.1 };
       } else {
         const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
         projectCenters[key] = {
-          x: width / 2 + Math.cos(angle) * Math.min(width, height) * 0.32,
-          y: height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28,
+          x: width / 2 + Math.cos(angle) * rSpread,
+          y: height / 2 + Math.sin(angle) * rSpread * 0.88,
         };
       }
     });
@@ -854,7 +867,7 @@ async function drawMap(options = {}) {
   on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
     fittedOnce = false;
-    reheat(0.8);
+    reheat(0.3);
     resetHighlight(true);
   });
   on(document.getElementById("btn-refresh"), "click", () => {
