@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMAP — контейнеры</title>
+  <title>{{ _('title.containers') }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>window.CMAP_LANG={{ lang|tojson }};window.CMAP_I18N={{ i18n_catalog|tojson }};</script>
+  <script src="{{ url_for('static', filename='i18n.js') }}" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -13,40 +15,46 @@
         <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
         CMAP <span>container map</span>
       </div>
-      <nav class="nav">
-        <a class="active" href="/">Контейнеры</a>
-        <a href="/map">Карта</a>
-        <a href="/manage_hosts">Хосты</a>
-      </nav>
+      <div class="topbar-actions">
+        <div class="lang-switch" role="group" aria-label="{{ _('lang.label') }}">
+          <button type="button" class="btn lang-btn{% if lang == 'ru' %} active{% endif %}" data-set-lang="ru">RU</button>
+          <button type="button" class="btn lang-btn{% if lang == 'en' %} active{% endif %}" data-set-lang="en">EN</button>
+        </div>
+        <nav class="nav">
+          <a class="active" href="/">{{ _('nav.containers') }}</a>
+          <a href="/map">{{ _('nav.map') }}</a>
+          <a href="/manage_hosts">{{ _('nav.hosts') }}</a>
+        </nav>
+      </div>
     </header>
 
     <main class="page">
       <div class="page-head">
         <div>
-          <h1>Контейнеры</h1>
-          <p>Статус Docker-хостов и список контейнеров</p>
+          <h1>{{ _('containers.heading') }}</h1>
+          <p>{{ _('containers.sub') }}</p>
         </div>
-        <button class="btn" type="button" onclick="location.reload()" title="Обновить">Обновить</button>
+        <button class="btn" type="button" onclick="location.reload()" title="{{ _('containers.refresh') }}">{{ _('containers.refresh') }}</button>
       </div>
 
       <div class="chip-row" id="summary-chips">
-        <div class="chip"><span class="dot mute"></span>Всего <b>{{ total_running + total_stopped }}</b></div>
+        <div class="chip"><span class="dot mute"></span>{{ _('containers.total') }} <b>{{ total_running + total_stopped }}</b></div>
         <div class="chip"><span class="dot ok"></span>Running <b>{{ total_running }}</b></div>
         <div class="chip"><span class="dot warn"></span>Stopped <b>{{ total_stopped }}</b></div>
-        <div class="chip" title="{{ color_legend['green'] }}"><span class="dot ok"></span>хост OK</div>
-        <div class="chip" title="{{ color_legend['yellow'] }}"><span class="dot warn"></span>без running</div>
-        <div class="chip" title="{{ color_legend['red'] }}"><span class="dot danger"></span>хост down</div>
-        <div class="chip" title="{{ color_legend['blue'] }}"><span class="dot info"></span>пусто</div>
+        <div class="chip" title="{{ color_legend['green'] }}"><span class="dot ok"></span>{{ _('containers.host_ok') }}</div>
+        <div class="chip" title="{{ color_legend['yellow'] }}"><span class="dot warn"></span>{{ _('containers.no_running') }}</div>
+        <div class="chip" title="{{ color_legend['red'] }}"><span class="dot danger"></span>{{ _('containers.host_down') }}</div>
+        <div class="chip" title="{{ color_legend['blue'] }}"><span class="dot info"></span>{{ _('containers.empty') }}</div>
       </div>
 
       <div class="toolbar">
-        <input class="input" id="filter-q" type="search" placeholder="Поиск по имени или образу…">
+        <input class="input" id="filter-q" type="search" placeholder="{{ _('containers.search_ph') }}">
         <select class="input" id="filter-state">
-          <option value="all">Все состояния</option>
-          <option value="running">Только running</option>
-          <option value="stopped">Только stopped</option>
+          <option value="all">{{ _('containers.state_all') }}</option>
+          <option value="running">{{ _('containers.state_running') }}</option>
+          <option value="stopped">{{ _('containers.state_stopped') }}</option>
         </select>
-        <button class="btn" type="button" id="expand-all">Развернуть / свернуть</button>
+        <button class="btn" type="button" id="expand-all">{{ _('containers.expand') }}</button>
       </div>
 
       {% set host_count = results|length %}
@@ -58,7 +66,7 @@
             {{ host }}
           </h2>
           <span class="badge">
-            {% if data.error %}ошибка{% else %}{{ data.running|length }} run / {{ data.stopped|length }} stop{% endif %}
+            {% if data.error %}{{ _('containers.error') }}{% else %}{{ data.running|length }} run / {{ data.stopped|length }} stop{% endif %}
           </span>
         </div>
         <div class="card-body {% if host_count != 1 %}hidden{% endif %}">
@@ -69,7 +77,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Имя</th><th>Состояние</th><th>Порты</th><th>Статус</th><th>Образ</th><th>Проект</th>
+                  <th>{{ _('containers.col.name') }}</th><th>{{ _('containers.col.state') }}</th><th>{{ _('containers.col.ports') }}</th><th>{{ _('containers.col.status') }}</th><th>{{ _('containers.col.image') }}</th><th>{{ _('containers.col.project') }}</th>
                 </tr>
               </thead>
               <tbody class="rows-running">
@@ -90,7 +98,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Имя</th><th>Состояние</th><th>Порты</th><th>Статус</th><th>Образ</th><th>Проект</th>
+                  <th>{{ _('containers.col.name') }}</th><th>{{ _('containers.col.state') }}</th><th>{{ _('containers.col.ports') }}</th><th>{{ _('containers.col.status') }}</th><th>{{ _('containers.col.image') }}</th><th>{{ _('containers.col.project') }}</th>
                 </tr>
               </thead>
               <tbody class="rows-stopped">

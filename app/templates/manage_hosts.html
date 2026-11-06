@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMAP — хосты</title>
+  <title>{{ _('title.hosts') }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>window.CMAP_LANG={{ lang|tojson }};window.CMAP_I18N={{ i18n_catalog|tojson }};</script>
+  <script src="{{ url_for('static', filename='i18n.js') }}"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -13,33 +15,39 @@
         <img class="brand-mark" src="{{ url_for('static', filename='cmap-logo.svg') }}" alt="" width="28" height="28">
         CMAP <span>container map</span>
       </div>
-      <nav class="nav">
-        <a href="/">Контейнеры</a>
-        <a href="/map">Карта</a>
-        <a class="active" href="/manage_hosts">Хосты</a>
-      </nav>
+      <div class="topbar-actions">
+        <div class="lang-switch" role="group" aria-label="{{ _('lang.label') }}">
+          <button type="button" class="btn lang-btn{% if lang == 'ru' %} active{% endif %}" data-set-lang="ru">RU</button>
+          <button type="button" class="btn lang-btn{% if lang == 'en' %} active{% endif %}" data-set-lang="en">EN</button>
+        </div>
+        <nav class="nav">
+          <a href="/">{{ _('nav.containers') }}</a>
+          <a href="/map">{{ _('nav.map') }}</a>
+          <a class="active" href="/manage_hosts">{{ _('nav.hosts') }}</a>
+        </nav>
+      </div>
     </header>
 
     <main class="page">
       <div class="page-head">
         <div>
-          <h1>Хосты Docker</h1>
-          <p>localhost ходит через docker.sock. Удалённые — по Docker API (порт).</p>
+          <h1>{{ _('hosts.heading') }}</h1>
+          <p>{{ _('hosts.sub') }}</p>
         </div>
       </div>
 
       <ul class="host-list" id="host-list"></ul>
       <div class="toast" id="list-toast"></div>
 
-      <h2 style="margin:28px 0 12px;font-size:1.1rem">Добавить хост</h2>
+      <h2 style="margin:28px 0 12px;font-size:1.1rem">{{ _('hosts.add_heading') }}</h2>
       <form class="form-card" id="host-form">
-        <label>Хост
-          <input class="input" id="host" required placeholder="например 192.168.1.10">
+        <label>{{ _('hosts.host') }}
+          <input class="input" id="host" required placeholder="{{ _('hosts.host_ph') }}">
         </label>
-        <label>Порт API
+        <label>{{ _('hosts.port') }}
           <input class="input" id="port" type="number" value="2375" required>
         </label>
-        <button class="btn btn-primary" type="submit">Добавить хост</button>
+        <button class="btn btn-primary" type="submit">{{ _('hosts.add') }}</button>
         <div class="toast" id="form-toast"></div>
       </form>
     </main>
@@ -74,13 +82,13 @@
 
         const nameInput = document.createElement('input');
         nameInput.className = 'input';
-        nameInput.placeholder = 'Отображаемое имя';
+        nameInput.placeholder = t('hosts.visible_name');
         nameInput.value = host.visible_name || '';
 
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn';
         saveBtn.type = 'button';
-        saveBtn.textContent = 'Сохранить имя';
+        saveBtn.textContent = t('hosts.save_name');
         saveBtn.onclick = () => updateHostName(host.id, nameInput.value);
 
         actions.append(nameInput, saveBtn);
@@ -89,13 +97,13 @@
           const delBtn = document.createElement('button');
           delBtn.className = 'btn btn-danger';
           delBtn.type = 'button';
-          delBtn.textContent = 'Удалить';
+          delBtn.textContent = t('hosts.delete');
           delBtn.onclick = () => deleteHost(host.id);
           actions.append(delBtn);
         } else {
           const lock = document.createElement('span');
           lock.className = 'badge';
-          lock.textContent = 'защищён';
+          lock.textContent = t('hosts.protected');
           actions.append(lock);
         }
 
@@ -110,7 +118,7 @@
       const host = document.getElementById('host').value.trim();
       const port = Number(document.getElementById('port').value);
       if (!host) {
-        formToast.textContent = 'Укажите хост';
+        formToast.textContent = t('hosts.need_host');
         return;
       }
       const response = await fetch('/hosts', {
@@ -119,7 +127,8 @@
         body: JSON.stringify({ host, port }),
       });
       if (!response.ok) {
-        formToast.textContent = 'Не удалось добавить хост';
+        const data = await response.json().catch(() => ({}));
+        formToast.textContent = data.message || t('hosts.add_failed');
         return;
       }
       document.getElementById('host-form').reset();
@@ -135,7 +144,7 @@
         body: JSON.stringify({ id, visible_name: name }),
       });
       if (!response.ok) {
-        listToast.textContent = 'Не удалось сохранить имя';
+        listToast.textContent = t('hosts.save_failed');
         return;
       }
       fetchHosts();
@@ -150,7 +159,7 @@
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        listToast.textContent = data.message || 'Не удалось удалить';
+        listToast.textContent = data.message || t('hosts.delete_failed');
         return;
       }
       fetchHosts();

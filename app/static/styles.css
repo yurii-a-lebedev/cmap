@@ -64,6 +64,30 @@ a:hover { text-decoration: underline; }
   justify-content: flex-end;
   min-width: 0;
 }
+.lang-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.lang-btn {
+  min-width: 36px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.lang-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent-ink);
+}
+.lang-btn:hover { text-decoration: none; }
 .btn.map-panel-btn { display: inline-flex; }
 .btn.map-panel-btn.has-selection {
   border-color: var(--accent);

@@ -40,7 +40,12 @@ function formatUpdated(ts) {
   if (!ts) return "";
   const d = new Date(ts * 1000);
   if (Number.isNaN(d.getTime())) return "";
-  return `обновлено ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+  const time = d.toLocaleTimeString(typeof localeTag === "function" ? localeTag() : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  return typeof t === "function" ? t("map.updated", { time }) : `updated ${time}`;
 }
 
 function clearMapUi() {
@@ -65,7 +70,7 @@ async function fetchMapData(fresh = false) {
 
 async function drawMap(options = {}) {
   const { fresh = false, preserveNode = null } = options;
-  const portColors = {
+    const portColors = {
     80: "#4A90E2",
     443: "#5ecf8a",
     5432: "#BD10E0",
@@ -106,7 +111,7 @@ async function drawMap(options = {}) {
 
   const data = await fetchMapData(fresh);
   let nodes = data.nodes.slice();
-  const links = data.links;
+    const links = data.links;
   const coverage = data.coverage || { without_connect_to: [], with_connect_to: 0, total: nodes.length };
   const topo = structureKey(data);
 
@@ -118,8 +123,8 @@ async function drawMap(options = {}) {
 
   links.forEach((link) => {
     if (!nodes.find((n) => n.id === link.target)) {
-      nodes.push({
-        id: link.target,
+            nodes.push({
+                id: link.target,
         name: String(link.target).replace(/^external:/, ""),
         state: "external",
         host: "external",
@@ -129,9 +134,9 @@ async function drawMap(options = {}) {
         compose_service: "",
         connect_to: "",
         ports: [],
-      });
-    }
-  });
+            });
+        }
+    });
 
   // Узлы только с external-связями — держим у шлюза, не внутри чужой звезды.
   const nbrIds = new Map();
@@ -181,7 +186,11 @@ async function drawMap(options = {}) {
   const covList = document.getElementById("coverage-list");
   if (covSummary) {
     const missing = (coverage.without_connect_to || []).length;
-    covSummary.textContent = `${coverage.with_connect_to || 0}/${coverage.total || nodes.length} с лейблом · без: ${missing}`;
+    covSummary.textContent = t("map.coverage_summary", {
+      with_label: coverage.with_connect_to || 0,
+      total: coverage.total || nodes.length,
+      missing,
+    });
   }
 
   const updatedEl = document.getElementById("map-updated");
@@ -251,7 +260,7 @@ async function drawMap(options = {}) {
     if (!drawerBtn) return;
     drawerBtn.classList.toggle("has-selection", selectedNodes.size > 0);
     const sel = selectedNodes.size ? [...selectedNodes][0] : null;
-    drawerBtn.title = sel ? `Узел: ${sel.name}` : "Карточка узла";
+    drawerBtn.title = sel ? t("map.node_named", { name: sel.name }) : t("map.node_card");
   }
 
   let activeProject = "";
@@ -318,7 +327,7 @@ async function drawMap(options = {}) {
       return !event.button;
     })
     .on("zoom", (event) => {
-      g.attr("transform", event.transform);
+            g.attr("transform", event.transform);
       // Ручной pan/zoom — не перетягивать кадр автофитом
       if (event.sourceEvent && framingLive) framingLive = false;
     });
@@ -451,9 +460,9 @@ async function drawMap(options = {}) {
 
   const link = g
     .append("g")
-    .selectAll("line")
-    .data(links)
-    .join("line")
+        .selectAll("line")
+        .data(links)
+        .join("line")
     .attr("class", "link-line")
     .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#9aa6b5")
     .attr("stroke-width", 1.25)
@@ -461,13 +470,13 @@ async function drawMap(options = {}) {
 
   const linkLabels = g
     .append("g")
-    .selectAll("g")
-    .data(links)
-    .join("g")
-    .attr("class", "link-label-group")
+        .selectAll("g")
+        .data(links)
+        .join("g")
+        .attr("class", "link-label-group")
     .style("visibility", "hidden")
-    .each(function (d) {
-      d3.select(this)
+        .each(function (d) {
+            d3.select(this)
         .append("rect")
         .attr("x", -18)
         .attr("y", -10)
@@ -476,39 +485,39 @@ async function drawMap(options = {}) {
         .attr("rx", 6)
         .attr("fill", "#ffffff")
         .attr("stroke", portColors[parseInt(d.target_port, 10)] || "#9aa6b5");
-      d3.select(this)
-        .append("text")
-        .attr("text-anchor", "middle")
-        .attr("dy", "0.35em")
+            d3.select(this)
+                .append("text")
+                .attr("text-anchor", "middle")
+                .attr("dy", "0.35em")
         .style("font-size", "11px")
         .style("fill", "#1c2430")
         .text(d.target_port);
-    });
+        });
 
-  const defs = svg.append("defs");
+    const defs = svg.append("defs");
   defs
     .append("marker")
-    .attr("id", "arrow")
-    .attr("viewBox", "0 -5 10 10")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
     .attr("refX", 28)
-    .attr("refY", 0)
-    .attr("markerWidth", 6)
-    .attr("markerHeight", 6)
-    .attr("orient", "auto")
-    .append("path")
-    .attr("d", "M0,-5L10,0L0,5")
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
     .attr("fill", "#9aa6b5");
-  link.attr("marker-end", "url(#arrow)");
+    link.attr("marker-end", "url(#arrow)");
 
   const node = g
     .append("g")
-    .selectAll("g")
-    .data(nodes)
-    .join("g")
-    .attr("class", "node")
+        .selectAll("g")
+        .data(nodes)
+        .join("g")
+        .attr("class", "node")
     .style("cursor", "pointer")
-    .call(drag(simulation))
-    .on("click", (event, d) => {
+        .call(drag(simulation))
+        .on("click", (event, d) => {
       event.stopPropagation();
       if (selectedNodes.has(d) && selectedNodes.size === 1) {
         resetHighlight(true);
@@ -526,7 +535,7 @@ async function drawMap(options = {}) {
       event.stopPropagation();
       selectedNodes.clear();
       selectedNodes.add(d);
-      highlightConnections();
+            highlightConnections();
       fillDrawer(d);
       setNodeQuery(d.name);
       updateDrawerButton();
@@ -552,7 +561,7 @@ async function drawMap(options = {}) {
     .attr("stroke", "#dde3ec");
   label
     .append("text")
-    .attr("text-anchor", "middle")
+        .attr("text-anchor", "middle")
     .attr("dy", "0.35em")
     .style("fill", "#1c2430")
     .style("font-size", "12px")
@@ -569,7 +578,7 @@ async function drawMap(options = {}) {
     rect.setAttribute("height", box.height + 6);
   });
 
-  simulation.on("tick", () => {
+    simulation.on("tick", () => {
     if (destroyed) return;
     link
       .attr("x1", (d) => d.source.x)
@@ -727,14 +736,14 @@ async function drawMap(options = {}) {
         })
         .join(", ") || "—";
     body.innerHTML = `
-      <div><dt>Имя</dt><dd>${escapeHtml(d.name)}</dd></div>
-      <div><dt>Состояние</dt><dd>${escapeHtml(d.state || "—")}</dd></div>
-      <div><dt>Статус</dt><dd>${escapeHtml(d.status || "—")}</dd></div>
-      <div><dt>Хост</dt><dd>${escapeHtml(d.host || "—")}</dd></div>
-      <div><dt>Образ</dt><dd>${escapeHtml(d.image || "—")}</dd></div>
-      <div><dt>Проект</dt><dd>${escapeHtml(d.project || "—")}</dd></div>
+      <div><dt>${t("map.field.name")}</dt><dd>${escapeHtml(d.name)}</dd></div>
+      <div><dt>${t("map.field.state")}</dt><dd>${escapeHtml(d.state || "—")}</dd></div>
+      <div><dt>${t("map.field.status")}</dt><dd>${escapeHtml(d.status || "—")}</dd></div>
+      <div><dt>${t("map.field.host")}</dt><dd>${escapeHtml(d.host || "—")}</dd></div>
+      <div><dt>${t("map.field.image")}</dt><dd>${escapeHtml(d.image || "—")}</dd></div>
+      <div><dt>${t("map.field.project")}</dt><dd>${escapeHtml(d.project || "—")}</dd></div>
       <div><dt>compose service</dt><dd>${escapeHtml(d.compose_service || "—")}</dd></div>
-      <div><dt>Порты</dt><dd>${escapeHtml(ports)}</dd></div>
+      <div><dt>${t("map.field.ports")}</dt><dd>${escapeHtml(ports)}</dd></div>
       <div><dt>connect_to</dt><dd>${escapeHtml(d.connect_to || "—")}</dd></div>
     `;
   }
@@ -759,7 +768,7 @@ async function drawMap(options = {}) {
       .replaceAll(">", "&gt;");
   }
 
-  function highlightConnections() {
+    function highlightConnections() {
     if (!selectedNodes.size) {
       node.selectAll("circle").attr("opacity", 1);
       link
@@ -769,18 +778,18 @@ async function drawMap(options = {}) {
       return;
     }
 
-    const connectedLinks = new Set();
-    const connectedNodes = new Set();
+        const connectedLinks = new Set();
+        const connectedNodes = new Set();
     selectedNodes.forEach((selected) => {
       connectedNodes.add(selected);
       links.forEach((link) => {
         if (link.source.id === selected.id || link.target.id === selected.id) {
-          connectedLinks.add(link);
-          connectedNodes.add(link.source);
+                    connectedLinks.add(link);
+                    connectedNodes.add(link.source);
           connectedNodes.add(link.target);
-        }
-      });
-    });
+                }
+            });
+        });
 
     link
       .attr("stroke", (d) =>
@@ -865,7 +874,10 @@ async function drawMap(options = {}) {
     const visibleNodes = nodes.filter((d) => visible.has(d.id));
     const stats = document.getElementById("map-stats");
     if (stats) {
-      stats.textContent = `На карте: ${visibleNodes.length} узлов · ${links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length} связей`;
+      stats.textContent = t("map.stats", {
+        nodes: visibleNodes.length,
+        links: links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length,
+      });
     }
 
     if (q && !selectedNodes.size) {
@@ -934,16 +946,16 @@ async function drawMap(options = {}) {
       .drag()
       .on("start", (event) => {
         if (!event.active) sim.alphaTarget(0.06).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
+            event.subject.fx = event.subject.x;
+            event.subject.fy = event.subject.y;
       })
       .on("drag", (event) => {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
       })
       .on("end", (event) => {
-        event.subject.fx = null;
-        event.subject.fy = null;
+            event.subject.fx = null;
+            event.subject.fy = null;
         if (!event.active) sim.alphaTarget(0);
         // Мягкий «выдох» после отпускания — без рывка
         sim.alpha(Math.max(sim.alpha(), 0.08)).restart();
@@ -972,7 +984,7 @@ async function drawMap(options = {}) {
   function setProjectFilter(project) {
     activeProject = project;
     [...chips.querySelectorAll(".project-chip")].forEach((el) => {
-      const isAll = el.textContent === "все";
+      const isAll = el.dataset.projectAll === "1";
       el.classList.toggle("active", isAll ? !project : el.textContent === project);
     });
     applyFilters({ refit: true });
@@ -982,7 +994,8 @@ async function drawMap(options = {}) {
   const allChip = document.createElement("button");
   allChip.type = "button";
   allChip.className = "project-chip active";
-  allChip.textContent = "все";
+  allChip.dataset.projectAll = "1";
+  allChip.textContent = t("map.all_projects");
   allChip.onclick = () => setProjectFilter("");
   chips.appendChild(allChip);
   projectNames.forEach((p) => {
@@ -1151,7 +1164,11 @@ async function drawMap(options = {}) {
     const covSummary = document.getElementById("coverage-summary");
     if (covSummary) {
       const missing = (cov.without_connect_to || []).length;
-      covSummary.textContent = `${cov.with_connect_to || 0}/${cov.total || nodes.length} с лейблом · без: ${missing}`;
+      covSummary.textContent = t("map.coverage_summary", {
+        with_label: cov.with_connect_to || 0,
+        total: cov.total || nodes.length,
+        missing,
+      });
     }
     const updatedEl = document.getElementById("map-updated");
     if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);

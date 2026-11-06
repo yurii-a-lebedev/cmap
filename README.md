@@ -7,6 +7,7 @@
 - **Контейнеры** — список по хостам, поиск, фильтр running/stopped; имя открывает узел на карте (`/map?node=…`)
 - **Карта** — D3-граф, кластер по compose `project`, фильтры и карточка узла по запросу, Fit/zoom, покрытие без `connect_to`, soft-refresh ~20с
 - **Хосты** — `localhost` через docker.sock (RO); удалённые Docker API по желанию
+- **Язык** — UI на `ru` / `en` по языку браузера (`Accept-Language`); ручной переключатель RU|EN (cookie `cmap_lang`, также `?lang=ru`)
 
 ## Быстрый старт
 

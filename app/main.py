@@ -12,9 +12,20 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 
 from app.config import Config
+from app.i18n import COOKIE, init_i18n, normalize_lang, translate
 
 app = Flask(__name__)
 app.config.from_object(Config)
+init_i18n(app)
+
+
+@app.after_request
+def persist_lang_cookie(response):
+    raw = request.args.get("lang")
+    lang = normalize_lang(raw) if raw else None
+    if lang:
+        response.set_cookie(COOKIE, lang, max_age=365 * 24 * 3600, samesite="Lax")
+    return response
 
 db = SQLAlchemy(app)
 
@@ -60,10 +71,10 @@ def get_docker_containers(remote_host, port):
             conn.request("GET", "/containers/json?all=true")
             response = conn.getresponse()
             if response.status != 200:
-                return f"Ошибка: {response.status}, {response.reason}"
+                return f"Error: {response.status}, {response.reason}"
             return json.loads(response.read().decode())
         except Exception as e:
-            return f"Не удалось подключиться к хосту: {e}"
+            return f"Could not connect to host: {e}"
 
     url = f"http://{remote_host}:{port}/containers/json?all=true"
     try:
@@ -71,7 +82,7 @@ def get_docker_containers(remote_host, port):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        return f"Не удалось подключиться к хосту: {e}"
+        return f"Could not connect to host: {e}"
 
 
 def _normalize_ports(raw_ports):
@@ -131,7 +142,7 @@ def collect_inventory(force_fresh=False):
                 try:
                     containers = fut.result()
                 except Exception as e:
-                    containers = f"Не удалось подключиться к хосту: {e}"
+                    containers = f"Could not connect to host: {e}"
                 fetched.append(
                     {
                         "host": row["host"],
@@ -366,10 +377,10 @@ if ENABLE_ROUTES.get("index"):
         inventory = collect_inventory(force_fresh=force)
         results, total_running, total_stopped = build_index_results(inventory)
         color_legend = {
-            "red": "Хост не доступен",
-            "blue": "На хосте нет контейнеров",
-            "yellow": "На хосте нет запущенных контейнеров",
-            "green": "Хост доступен и на нем есть запущенные контейнеры",
+            "red": translate("legend.red"),
+            "blue": translate("legend.blue"),
+            "yellow": translate("legend.yellow"),
+            "green": translate("legend.green"),
         }
         return render_template(
             "index.html",
@@ -403,40 +414,42 @@ if ENABLE_ROUTES.get("hosts"):
             try:
                 port = int(data.get("port"))
             except (TypeError, ValueError):
-                return jsonify({"message": "Некорректный порт"}), 400
+                return jsonify({"message": translate("api.bad_port")}), 400
             if not host_name:
-                return jsonify({"message": "Хост обязателен"}), 400
+                return jsonify({"message": translate("api.host_required")}), 400
             if port < 1 or port > 65535:
-                return jsonify({"message": "Порт должен быть 1–65535"}), 400
+                return jsonify({"message": translate("api.port_range")}), 400
             if Host.query.filter_by(host=host_name, port=port).first():
-                return jsonify({"message": "Такой хост уже есть"}), 409
+                return jsonify({"message": translate("api.host_exists")}), 409
             new_host = Host(host=host_name, port=port)
             db.session.add(new_host)
             db.session.commit()
             invalidate_inventory_cache()
-            return jsonify({"message": "Хост добавлен", "host": host_name, "port": port}), 201
+            return jsonify(
+                {"message": translate("api.host_added"), "host": host_name, "port": port}
+            ), 201
 
         if request.method == "DELETE":
             data = request.json or {}
             host = Host.query.get(data.get("id"))
             if not host:
-                return jsonify({"message": "Хост не найден"}), 404
+                return jsonify({"message": translate("api.host_not_found")}), 404
             if host.host == "localhost":
-                return jsonify({"message": "localhost нельзя удалить"}), 400
+                return jsonify({"message": translate("api.localhost_protected")}), 400
             db.session.delete(host)
             db.session.commit()
             invalidate_inventory_cache()
-            return jsonify({"message": "Хост удален"}), 200
+            return jsonify({"message": translate("api.host_deleted")}), 200
 
         if request.method == "PATCH":
             data = request.json or {}
             host = Host.query.get(data.get("id"))
             if not host:
-                return jsonify({"message": "Хост не найден"}), 404
+                return jsonify({"message": translate("api.host_not_found")}), 404
             host.visible_name = data.get("visible_name")
             db.session.commit()
             invalidate_inventory_cache()
-            return jsonify({"message": "Имя обновлено"}), 200
+            return jsonify({"message": translate("api.name_updated")}), 200
 
 
 if ENABLE_ROUTES.get("containers_map"):

@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CMAP — карта</title>
+  <title>{{ _('title.map') }}</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>window.CMAP_LANG={{ lang|tojson }};window.CMAP_I18N={{ i18n_catalog|tojson }};</script>
+  <script src="{{ url_for('static', filename='i18n.js') }}"></script>
 </head>
 <body class="map-app">
   <header class="topbar">
@@ -14,95 +16,99 @@
       CMAP <span>container map</span>
     </div>
     <div class="topbar-actions">
-      <button class="btn map-panel-btn" type="button" id="btn-toggle-filters" aria-expanded="false" aria-controls="map-side">Фильтры</button>
-      <button class="btn map-panel-btn" type="button" id="btn-toggle-drawer" aria-expanded="false" aria-controls="drawer">Узел</button>
+      <button class="btn map-panel-btn" type="button" id="btn-toggle-filters" aria-expanded="false" aria-controls="map-side">{{ _('map.filters') }}</button>
+      <button class="btn map-panel-btn" type="button" id="btn-toggle-drawer" aria-expanded="false" aria-controls="drawer">{{ _('map.node') }}</button>
+      <div class="lang-switch" role="group" aria-label="{{ _('lang.label') }}">
+        <button type="button" class="btn lang-btn{% if lang == 'ru' %} active{% endif %}" data-set-lang="ru">RU</button>
+        <button type="button" class="btn lang-btn{% if lang == 'en' %} active{% endif %}" data-set-lang="en">EN</button>
+      </div>
       <nav class="nav">
-        <a href="/">Контейнеры</a>
-        <a class="active" href="/map">Карта</a>
-        <a href="/manage_hosts">Хосты</a>
+        <a href="/">{{ _('nav.containers') }}</a>
+        <a class="active" href="/map">{{ _('nav.map') }}</a>
+        <a href="/manage_hosts">{{ _('nav.hosts') }}</a>
       </nav>
     </div>
   </header>
 
   <div class="map-layout">
-    <button class="map-backdrop" type="button" id="map-backdrop" aria-label="Закрыть панель" hidden></button>
+    <button class="map-backdrop" type="button" id="map-backdrop" aria-label="{{ _('map.close_panel') }}" hidden></button>
     <aside class="map-side" id="map-side">
       <div class="map-panel-head">
-        <strong class="map-panel-title">Фильтры</strong>
-        <button class="btn map-panel-close" type="button" data-close-panel="filters" aria-label="Закрыть">✕</button>
+        <strong class="map-panel-title">{{ _('map.filters') }}</strong>
+        <button class="btn map-panel-close" type="button" data-close-panel="filters" aria-label="{{ _('map.close') }}">✕</button>
       </div>
 
       <div class="block">
-        <h3>Поиск</h3>
-        <input class="input" id="search-box" type="search" list="node-names" placeholder="Имя контейнера… ↵" autocomplete="off">
+        <h3>{{ _('map.search') }}</h3>
+        <input class="input" id="search-box" type="search" list="node-names" placeholder="{{ _('map.search_ph') }}" autocomplete="off">
         <datalist id="node-names"></datalist>
-        <p class="field-hint">Enter — выбрать · Esc — сброс · / — фокус в поиск</p>
+        <p class="field-hint">{{ _('map.search_hint') }}</p>
       </div>
 
       <div class="block">
-        <h3>Фильтры</h3>
+        <h3>{{ _('map.filters') }}</h3>
         <div class="filter-row">
-          <label><input type="checkbox" id="flt-running" checked> Запущенные</label>
-          <label><input type="checkbox" id="flt-stopped"> Остановленные</label>
-          <label><input type="checkbox" id="flt-external" checked> Внешние</label>
-          <label><input type="checkbox" id="flt-linked-only" checked> Только со связями</label>
-          <label><input type="checkbox" id="flt-cluster" checked> Кластер по проекту</label>
+          <label><input type="checkbox" id="flt-running" checked> {{ _('map.running') }}</label>
+          <label><input type="checkbox" id="flt-stopped"> {{ _('map.stopped') }}</label>
+          <label><input type="checkbox" id="flt-external" checked> {{ _('map.external') }}</label>
+          <label><input type="checkbox" id="flt-linked-only" checked> {{ _('map.linked_only') }}</label>
+          <label><input type="checkbox" id="flt-cluster" checked> {{ _('map.cluster') }}</label>
         </div>
-        <input class="input" id="flt-prefix" style="margin-top:8px;width:100%" placeholder="Префикс / проект…">
+        <input class="input" id="flt-prefix" style="margin-top:8px;width:100%" placeholder="{{ _('map.prefix_ph') }}">
       </div>
 
       <div class="block">
-        <h3>Проекты</h3>
+        <h3>{{ _('map.projects') }}</h3>
         <div class="project-chips" id="project-chips"></div>
       </div>
 
       <div class="block">
-        <h3>Вид</h3>
+        <h3>{{ _('map.view') }}</h3>
         <div class="zoom-row">
-          <button class="btn" type="button" id="btn-fit" title="Вписать всю карту">Вписать</button>
-          <button class="btn" type="button" id="btn-zoom-in" title="Приблизить">+</button>
-          <button class="btn" type="button" id="btn-zoom-out" title="Отдалить">−</button>
-          <button class="btn" type="button" id="btn-reset" title="Сбросить позиции узлов">Сброс</button>
-          <button class="btn" type="button" id="btn-refresh" title="Обновить данные с Docker">Обновить</button>
+          <button class="btn" type="button" id="btn-fit" title="{{ _('map.fit') }}">{{ _('map.fit') }}</button>
+          <button class="btn" type="button" id="btn-zoom-in" title="{{ _('map.zoom_in') }}">+</button>
+          <button class="btn" type="button" id="btn-zoom-out" title="{{ _('map.zoom_out') }}">−</button>
+          <button class="btn" type="button" id="btn-reset" title="{{ _('map.reset') }}">{{ _('map.reset') }}</button>
+          <button class="btn" type="button" id="btn-refresh" title="{{ _('map.refresh') }}">{{ _('map.refresh') }}</button>
         </div>
         <div class="muted-hint" id="map-stats"></div>
         <div class="muted-hint" id="map-updated"></div>
       </div>
 
       <details class="side-fold" open>
-        <summary>Без connect_to</summary>
+        <summary>{{ _('map.coverage') }}</summary>
         <div class="muted-hint" id="coverage-summary"></div>
         <div class="coverage-list" id="coverage-list"></div>
       </details>
 
       <details class="side-fold">
-        <summary>Легенда</summary>
+        <summary>{{ _('map.legend') }}</summary>
         <div class="legend-item"><span class="swatch" style="background:#5ecf8a"></span>running</div>
         <div class="legend-item"><span class="swatch" style="background:#e6a23c"></span>created</div>
         <div class="legend-item"><span class="swatch" style="background:#667384"></span>stopped</div>
         <div class="legend-item"><span class="swatch" style="background:#6aa8ff"></span>external</div>
-        <h3 class="fold-sub">Порты связей</h3>
+        <h3 class="fold-sub">{{ _('map.port_legend') }}</h3>
         <div id="port-legend"></div>
       </details>
     </aside>
 
     <div class="map-canvas">
-      <div class="map-float-tools" aria-label="Управление картой">
-        <button class="btn" type="button" id="btn-fit-float" title="Вписать">⊡</button>
-        <button class="btn" type="button" id="btn-zoom-in-float" title="Приблизить">+</button>
-        <button class="btn" type="button" id="btn-zoom-out-float" title="Отдалить">−</button>
+      <div class="map-float-tools" aria-label="{{ _('map.tools') }}">
+        <button class="btn" type="button" id="btn-fit-float" title="{{ _('map.fit') }}">⊡</button>
+        <button class="btn" type="button" id="btn-zoom-in-float" title="{{ _('map.zoom_in') }}">+</button>
+        <button class="btn" type="button" id="btn-zoom-out-float" title="{{ _('map.zoom_out') }}">−</button>
       </div>
       <svg id="map-svg"></svg>
     </div>
 
     <aside class="map-drawer" id="drawer">
       <div class="map-panel-head">
-        <h3>Узел</h3>
-        <button class="btn map-panel-close" type="button" data-close-panel="drawer" aria-label="Закрыть">✕</button>
+        <h3>{{ _('map.node') }}</h3>
+        <button class="btn map-panel-close" type="button" data-close-panel="drawer" aria-label="{{ _('map.close') }}">✕</button>
       </div>
-      <div class="drawer-empty" id="drawer-empty">Выберите узел на карте (клик), затем откройте эту панель. Двойной клик по узлу — сразу открыть. Esc — закрыть.</div>
+      <div class="drawer-empty" id="drawer-empty">{{ _('map.drawer_empty') }}</div>
       <div class="drawer-kv" id="drawer-body" hidden></div>
-      <button class="btn drawer-clear" type="button" id="btn-clear-selection" hidden>Сбросить выделение</button>
+      <button class="btn drawer-clear" type="button" id="btn-clear-selection" hidden>{{ _('map.clear_selection') }}</button>
     </aside>
   </div>
 
