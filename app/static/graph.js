@@ -59,6 +59,13 @@ function clearMapUi() {
   if (portLegend) portLegend.innerHTML = "";
   const coverage = document.getElementById("coverage-list");
   if (coverage) coverage.innerHTML = "";
+  const strip = document.getElementById("route-strip");
+  if (strip) strip.hidden = true;
+  const stripInner = document.getElementById("route-strip-inner");
+  if (stripInner) stripInner.innerHTML = "";
+  const stripLabel = document.getElementById("route-strip-label");
+  if (stripLabel) stripLabel.textContent = "";
+  document.querySelector(".map-app")?.classList.remove("has-route");
 }
 
 async function fetchMapData(fresh = false) {
@@ -215,26 +222,24 @@ async function drawMap(options = {}) {
 
   function syncPanelState() {
     if (!mapApp) return;
-    mapApp.classList.toggle(
-      "panel-open",
-      mapApp.classList.contains("filters-open") || mapApp.classList.contains("drawer-open")
-    );
+    const filtersOpen = mapApp.classList.contains("filters-open");
+    const drawerOpen = mapApp.classList.contains("drawer-open");
+    mapApp.classList.toggle("panel-open", filtersOpen || drawerOpen);
     if (backdrop) {
       backdrop.hidden = !mapApp.classList.contains("panel-open");
     }
+    const side = document.getElementById("map-side");
+    const drawerEl = document.getElementById("drawer");
+    // Закрытые шторки не в фокусе/a11y-дереве
+    if (side) side.inert = !filtersOpen;
+    if (drawerEl) drawerEl.inert = !drawerOpen;
     const filtBtn = document.getElementById("btn-toggle-filters");
     if (filtBtn) {
-      filtBtn.setAttribute(
-        "aria-expanded",
-        mapApp.classList.contains("filters-open") ? "true" : "false"
-      );
+      filtBtn.setAttribute("aria-expanded", filtersOpen ? "true" : "false");
     }
     const drawerBtn = document.getElementById("btn-toggle-drawer");
     if (drawerBtn) {
-      drawerBtn.setAttribute(
-        "aria-expanded",
-        mapApp.classList.contains("drawer-open") ? "true" : "false"
-      );
+      drawerBtn.setAttribute("aria-expanded", drawerOpen ? "true" : "false");
       drawerBtn.classList.toggle("has-selection", selectedNodes.size > 0);
     }
   }
@@ -268,21 +273,6 @@ async function drawMap(options = {}) {
   let selectionAnchor = null;
   /** Упорядоченный маршрут (два клика / path) — для линейки и яркой подсветки. */
   let routePath = null;
-
-  function nodesAreLinked(a, b) {
-    return links.some(
-      (l) =>
-        (l.source.id === a.id && l.target.id === b.id) ||
-        (l.source.id === b.id && l.target.id === a.id)
-    );
-  }
-
-  function isAdjacentToSelection(d) {
-    for (const sel of selectedNodes) {
-      if (nodesAreLinked(sel, d)) return true;
-    }
-    return false;
-  }
 
   /** Кратчайший путь по связям connect_to (без учёта направления). */
   function shortestPath(start, end) {
@@ -854,17 +844,6 @@ async function drawMap(options = {}) {
     fitToNodes(pool, animate);
   }
 
-  function focusNode(d) {
-    const scale = 1.25;
-    const t = d3.zoomIdentity
-      .translate(width / 2, height / 2)
-      .scale(scale)
-      .translate(-d.x, -d.y);
-    framingLive = false;
-    svg.interrupt();
-    svg.transition().duration(380).ease(d3.easeCubicInOut).call(zoomBehavior.transform, t);
-  }
-
   function beginSelectionFocus(d) {
     const linkedEl = document.getElementById("flt-linked-only");
     const searchEl = document.getElementById("search-box");
@@ -950,11 +929,6 @@ async function drawMap(options = {}) {
       <div><dt>${t("map.field.ports")}</dt><dd>${escapeHtml(ports)}</dd></div>
       <div><dt>connect_to</dt><dd>${escapeHtml(d.connect_to || "—")}</dd></div>
     `;
-  }
-
-  function showDrawer(d) {
-    fillDrawer(d);
-    openDrawerPanel();
   }
 
   function clearDrawer() {
@@ -1148,10 +1122,14 @@ async function drawMap(options = {}) {
     const visibleNodes = nodes.filter((d) => visible.has(d.id));
     const stats = document.getElementById("map-stats");
     if (stats) {
-      stats.textContent = t("map.stats", {
-        nodes: visibleNodes.length,
-        links: links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length,
-      });
+      // Не затирать текст маршрута обычной статистикой
+      if (routePath && routePath.length > 1) showRouteStats(routePath);
+      else {
+        stats.textContent = t("map.stats", {
+          nodes: visibleNodes.length,
+          links: links.filter((l) => visible.has(l.source.id) && visible.has(l.target.id)).length,
+        });
+      }
     }
 
     if (q && !selectedNodes.size) {
@@ -1160,7 +1138,7 @@ async function drawMap(options = {}) {
         .selectAll("circle")
         .attr("stroke", (d) => (matches.includes(d) ? "#c94444" : defaultNodeStroke(d)))
         .attr("stroke-width", (d) => (matches.includes(d) ? 3 : defaultNodeStrokeWidth(d)));
-      if (matches.length === 1) {
+      if (matches.length === 1 && refit) {
         beginSelectionFocus(matches[0]);
       } else if (matches.length > 1 && refit) {
         fitToNodes(matches, true);
@@ -1413,6 +1391,7 @@ async function drawMap(options = {}) {
     on(window.visualViewport, "resize", debouncedResize);
   }
 
+  syncPanelState();
   applyFilters();
 
   function applyLiveUpdate(data) {

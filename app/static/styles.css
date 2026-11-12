@@ -591,7 +591,6 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
     url("cmap-logo.svg") center 48% / min(52vmin, 440px) no-repeat;
   opacity: 0.06;
   pointer-events: none;
-  pointer-events: none;
   z-index: 0;
 }
 .map-canvas::after {
