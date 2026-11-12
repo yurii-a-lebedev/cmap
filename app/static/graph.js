@@ -496,7 +496,7 @@ async function drawMap(options = {}) {
         .distanceMin(40)
         .distanceMax(720)
     )
-    .force("collide", d3.forceCollide().radius(72).strength(0.45).iterations(2))
+    .force("collide", d3.forceCollide().radius(78).strength(0.45).iterations(2))
     .force("straighten", forceStraighten(0.08))
     .force("externalLeaves", forceExternalLeaves(0.18))
     .force("centerX", d3.forceX(width / 2).strength(0.018))
@@ -649,36 +649,23 @@ async function drawMap(options = {}) {
   node
     .append("circle")
     .attr("class", "node-circle")
-    .attr("r", (d) => (d.state === "external" ? 18 : 22))
+    .attr("r", (d) => nodeRadius(d))
     .attr("fill", nodeColor)
-    .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
+    .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "rgba(28,36,48,0.18)"))
     .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25))
     .attr("stroke-dasharray", (d) => (d.state === "external" ? "4 3" : null));
 
-  const label = node.append("g").attr("class", "node-label").attr("transform", "translate(0,34)");
-  label
-    .append("rect")
-    .attr("rx", 7)
-    .attr("fill", "rgba(255,255,255,0.92)")
-    .attr("stroke", "#dde3ec");
-  label
+  // Имя внутри круга
+  node
     .append("text")
-        .attr("text-anchor", "middle")
+    .attr("class", "node-label-text")
+    .attr("text-anchor", "middle")
     .attr("dy", "0.35em")
-    .style("fill", "#1c2430")
-    .style("font-size", "12px")
-    .style("font-weight", "600")
-    .text((d) => truncate(d.name, 20));
-
-  label.each(function () {
-    const text = this.querySelector("text");
-    const rect = this.querySelector("rect");
-    const box = text.getBBox();
-    rect.setAttribute("x", box.x - 6);
-    rect.setAttribute("y", box.y - 3);
-    rect.setAttribute("width", box.width + 12);
-    rect.setAttribute("height", box.height + 6);
-  });
+    .style("pointer-events", "none")
+    .style("font-weight", "700")
+    .style("font-size", (d) => (innerLabel(d).length > 8 ? "9px" : "11px"))
+    .style("fill", (d) => labelColor(d))
+    .text((d) => innerLabel(d));
 
     simulation.on("tick", () => {
     if (destroyed) return;
@@ -729,12 +716,51 @@ async function drawMap(options = {}) {
   // Сразу поставить кадр по известным координатам — без вспышки 1:1 и последующего зума
   if (restoredCount > 0) fitToScreen(false);
 
+  function serviceKey(d) {
+    return String(d.compose_service || d.name || d.project || d.id || "node");
+  }
+
+  /** Стабильный цвет сервиса — разнообразие вместо «всё зелёное». */
+  function serviceColor(key) {
+    let h = 2166136261;
+    for (let i = 0; i < key.length; i++) {
+      h ^= key.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const hue = h % 360;
+    const sat = 52 + (h % 18);
+    const light = 46 + ((h >>> 8) % 10);
+    return `hsl(${hue} ${sat}% ${light}%)`;
+  }
+
   function nodeColor(d) {
-    if (d.state === "running") return "#5ecf8a";
-    if (d.state === "created") return "#e6a23c";
-    if (d.state === "exited" || d.state === "stopped" || d.state === "dead") return "#667384";
     if (d.state === "external") return "#dbe7ff";
-    return "#c5ced9";
+    if (d.state === "created") return "#e6a23c";
+    if (d.state === "exited" || d.state === "stopped" || d.state === "dead") return "#8b95a5";
+    return serviceColor(serviceKey(d));
+  }
+
+  function labelColor(d) {
+    if (d.state === "external") return "#1c3a7a";
+    return "#ffffff";
+  }
+
+  function nodeRadius(d) {
+    return d.state === "external" ? 26 : 30;
+  }
+
+  function innerLabel(d) {
+    const raw = String(d.name || "");
+    // убрать типичные префиксы compose-проекта для читаемости в круге
+    const proj = (d.project || "").toLowerCase();
+    let name = raw;
+    if (proj && name.toLowerCase().startsWith(proj + "-")) {
+      name = name.slice(proj.length + 1);
+    }
+    if (proj && name.toLowerCase().startsWith(proj + "_")) {
+      name = name.slice(proj.length + 1);
+    }
+    return truncate(name, 11);
   }
 
   function truncate(s, n) {
