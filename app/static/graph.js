@@ -496,7 +496,7 @@ async function drawMap(options = {}) {
         .distanceMin(40)
         .distanceMax(720)
     )
-    .force("collide", d3.forceCollide().radius(78).strength(0.45).iterations(2))
+    .force("collide", d3.forceCollide().radius(84).strength(0.5).iterations(2))
     .force("straighten", forceStraighten(0.08))
     .force("externalLeaves", forceExternalLeaves(0.18))
     .force("centerX", d3.forceX(width / 2).strength(0.018))
@@ -525,9 +525,12 @@ async function drawMap(options = {}) {
     .alphaDecay(0.012)
     .alphaMin(0.0008);
 
-  // Если раскладка уже сохранена — не взрывать граф с alpha=1
-  if (restoredCount >= Math.max(3, nodes.length * 0.35)) {
+  // Если раскладка уже сохранена — не взрывать граф и не гонять камеру за тиками
+  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
+  if (layoutMostlyRestored) {
     simulation.alpha(0.04);
+    framingLive = false;
+    fittedOnce = true;
   }
 
   const link = g
@@ -537,8 +540,8 @@ async function drawMap(options = {}) {
         .join("line")
     .attr("class", "link-line")
     .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#9aa6b5")
-    .attr("stroke-width", 1.25)
-    .attr("stroke-opacity", 0.55);
+    .attr("stroke-width", 1.35)
+    .attr("stroke-opacity", 0.45);
 
   const linkLabels = g
     .append("g")
@@ -651,8 +654,8 @@ async function drawMap(options = {}) {
     .attr("class", "node-circle")
     .attr("r", (d) => nodeRadius(d))
     .attr("fill", nodeColor)
-    .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "rgba(28,36,48,0.18)"))
-    .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25))
+    .attr("stroke", defaultNodeStroke)
+    .attr("stroke-width", defaultNodeStrokeWidth)
     .attr("stroke-dasharray", (d) => (d.state === "external" ? "4 3" : null));
 
   // Имя внутри круга
@@ -663,8 +666,11 @@ async function drawMap(options = {}) {
     .attr("dy", "0.35em")
     .style("pointer-events", "none")
     .style("font-weight", "700")
-    .style("font-size", (d) => (innerLabel(d).length > 8 ? "9px" : "11px"))
+    .style("font-size", (d) => (innerLabel(d).length > 7 ? "10px" : "12px"))
     .style("fill", (d) => labelColor(d))
+    .style("paint-order", "stroke")
+    .style("stroke", "rgba(0,0,0,0.28)")
+    .style("stroke-width", "2.5px")
     .text((d) => innerLabel(d));
 
     simulation.on("tick", () => {
@@ -722,14 +728,14 @@ async function drawMap(options = {}) {
 
   /** Стабильный цвет сервиса — разнообразие вместо «всё зелёное». */
   function serviceColor(key) {
-    let h = 2166136261;
+    let h = 2166136261 >>> 0;
     for (let i = 0; i < key.length; i++) {
       h ^= key.charCodeAt(i);
-      h = Math.imul(h, 16777619);
+      h = Math.imul(h, 16777619) >>> 0;
     }
     const hue = h % 360;
-    const sat = 52 + (h % 18);
-    const light = 46 + ((h >>> 8) % 10);
+    const sat = 58 + (h % 16);
+    const light = 40 + ((h >>> 9) % 8); // темнее — белый текст читается
     return `hsl(${hue} ${sat}% ${light}%)`;
   }
 
@@ -745,13 +751,20 @@ async function drawMap(options = {}) {
     return "#ffffff";
   }
 
+  function defaultNodeStroke(d) {
+    return d.state === "external" ? "#2f6fed" : "rgba(28,36,48,0.22)";
+  }
+
+  function defaultNodeStrokeWidth(d) {
+    return d.state === "external" ? 2 : 1.25;
+  }
+
   function nodeRadius(d) {
-    return d.state === "external" ? 26 : 30;
+    return d.state === "external" ? 28 : 34;
   }
 
   function innerLabel(d) {
     const raw = String(d.name || "");
-    // убрать типичные префиксы compose-проекта для читаемости в круге
     const proj = (d.project || "").toLowerCase();
     let name = raw;
     if (proj && name.toLowerCase().startsWith(proj + "-")) {
@@ -760,7 +773,7 @@ async function drawMap(options = {}) {
     if (proj && name.toLowerCase().startsWith(proj + "_")) {
       name = name.slice(proj.length + 1);
     }
-    return truncate(name, 11);
+    return truncate(name, 10);
   }
 
   function truncate(s, n) {
@@ -902,11 +915,12 @@ async function drawMap(options = {}) {
       node
         .selectAll("circle")
         .attr("opacity", 1)
-        .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
-        .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
+        .attr("stroke", defaultNodeStroke)
+        .attr("stroke-width", defaultNodeStrokeWidth);
       link
         .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
-        .attr("opacity", 1);
+        .attr("opacity", 1)
+        .attr("stroke-width", 1.35);
       linkLabels.style("visibility", "hidden");
       return;
     }
@@ -946,10 +960,8 @@ async function drawMap(options = {}) {
     node
       .selectAll("circle")
       .attr("opacity", (d) => (connectedNodes.has(d) ? 1 : 0.15))
-      .attr("stroke", (d) =>
-        selectedNodes.has(d) ? "#0f9d8a" : d.state === "external" ? "#2f6fed" : "#c8d0dc"
-      )
-      .attr("stroke-width", (d) => (selectedNodes.has(d) ? 3.25 : d.state === "external" ? 2 : 1.25));
+      .attr("stroke", (d) => (selectedNodes.has(d) ? "#0f9d8a" : defaultNodeStroke(d)))
+      .attr("stroke-width", (d) => (selectedNodes.has(d) ? 3.5 : defaultNodeStrokeWidth(d)));
   }
 
   function resetHighlight(clearSearch = true) {
@@ -959,8 +971,8 @@ async function drawMap(options = {}) {
       .selectAll("circle")
       .attr("opacity", 1)
       .attr("fill", nodeColor)
-      .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
-      .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
+      .attr("stroke", defaultNodeStroke)
+      .attr("stroke-width", defaultNodeStrokeWidth);
     link
       .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
       .attr("opacity", 1);
@@ -1035,10 +1047,8 @@ async function drawMap(options = {}) {
       const matches = visibleNodes.filter((d) => d.name.toLowerCase().includes(q));
       node
         .selectAll("circle")
-        .attr("stroke", (d) =>
-          matches.includes(d) ? "#c94444" : d.state === "external" ? "#2f6fed" : "#c8d0dc"
-        )
-        .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2 : 1.25));
+        .attr("stroke", (d) => (matches.includes(d) ? "#c94444" : defaultNodeStroke(d)))
+        .attr("stroke-width", (d) => (matches.includes(d) ? 3 : defaultNodeStrokeWidth(d)));
       if (matches.length === 1) {
         beginSelectionFocus(matches[0]);
       } else if (matches.length > 1 && refit) {
@@ -1047,8 +1057,8 @@ async function drawMap(options = {}) {
     } else if (!selectedNodes.size) {
       node
         .selectAll("circle")
-        .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
-        .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
+        .attr("stroke", defaultNodeStroke)
+        .attr("stroke-width", defaultNodeStrokeWidth);
       if (refit && layoutReady && visibleNodes.length) {
         fitToNodes(visibleNodes, true);
       }
@@ -1164,10 +1174,8 @@ async function drawMap(options = {}) {
   function resizeMap() {
     const nextW = Math.max(canvas.clientWidth || 320, 280);
     const nextH = Math.max(canvas.clientHeight || 320, 280);
-    if (Math.abs(nextW - width) < 2 && Math.abs(nextH - height) < 2) {
-      fitToScreen(false);
-      return;
-    }
+    // Без смены размера не трогаем камеру — иначе карта «дёргается» на poll/viewport
+    if (Math.abs(nextW - width) < 4 && Math.abs(nextH - height) < 4) return;
     width = nextW;
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
@@ -1175,13 +1183,15 @@ async function drawMap(options = {}) {
     simulation.force("centerX", d3.forceX(width / 2).strength(0.018));
     simulation.force("centerY", d3.forceY(height / 2).strength(0.018));
     const rSpread = Math.min(width, height) * 0.42;
-    Object.keys(projectCenters).forEach((key, i, arr) => {
+    const projKeys = Object.keys(projectCenters).filter((k) => k !== "_none" && k !== "external");
+    Object.keys(projectCenters).forEach((key) => {
       if (key === "_none") {
         projectCenters[key] = { x: width / 2, y: height / 2 };
       } else if (key === "external") {
         projectCenters[key] = { x: width / 2, y: height * 0.1 };
       } else {
-        const angle = (i / Math.max(arr.length, 1)) * Math.PI * 2;
+        const i = projKeys.indexOf(key);
+        const angle = (i / Math.max(projKeys.length, 1)) * Math.PI * 2;
         projectCenters[key] = {
           x: width / 2 + Math.cos(angle) * rSpread,
           y: height / 2 + Math.sin(angle) * rSpread * 0.88,
@@ -1307,9 +1317,12 @@ async function drawMap(options = {}) {
       n.project = u.project;
       n.compose_service = u.compose_service;
       n.host = u.host;
+      n.name = u.name || n.name;
     });
+    // Только данные/цвет — без refit и без сброса камеры
     node.selectAll("circle").attr("fill", nodeColor);
     node.select("title").text((d) => d.name);
+    node.select("text.node-label-text").text((d) => innerLabel(d)).style("fill", (d) => labelColor(d));
 
     const cov = data.coverage || {};
     const covSummary = document.getElementById("coverage-summary");
@@ -1323,7 +1336,7 @@ async function drawMap(options = {}) {
     }
     const updatedEl = document.getElementById("map-updated");
     if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
-    applyFilters();
+    if (selectedNodes.size) highlightConnections();
   }
 
   mapController = {
@@ -1352,9 +1365,10 @@ async function softPoll({ forceFresh = false, allowRebuild = false } = {}) {
       mapController.applyLiveUpdate?.(data);
       return;
     }
-    // Структура изменилась — пересобираем, позиции уже в localStorage
+    // Тихий poll: не пересобираем граф (это дёргает камеру). Полный rebuild — по Refresh.
     if (!allowRebuild && !forceFresh) {
-      // На обычном poll тоже пересоберём, но со сохранённой раскладкой
+      mapController.applyLiveUpdate?.(data);
+      return;
     }
     const keep = new URLSearchParams(window.location.search).get("node");
     await drawMap({ fresh: forceFresh, preserveNode: keep });

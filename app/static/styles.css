@@ -502,8 +502,9 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   position: absolute;
   inset: 0;
   background:
-    url("cmap-logo.svg") center 48% / min(58vmin, 520px) no-repeat;
-  opacity: 0.11;
+    url("cmap-logo.svg") center 48% / min(52vmin, 440px) no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
   pointer-events: none;
   z-index: 0;
 }
