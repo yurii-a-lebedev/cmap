@@ -14,6 +14,12 @@
   {% set map_tools = true %}
   {% include 'partials/topbar.html' %}
 
+  <div class="route-strip" id="route-strip" hidden>
+    <div class="route-strip-label" id="route-strip-label"></div>
+    <div class="route-strip-track" id="route-strip-inner"></div>
+    <button class="btn route-strip-close" type="button" id="route-strip-close" aria-label="{{ _('map.close') }}">✕</button>
+  </div>
+
   <div class="map-layout">
     <button class="map-backdrop" type="button" id="map-backdrop" aria-label="{{ _('map.close_panel') }}" hidden></button>
     <aside class="map-side" id="map-side">

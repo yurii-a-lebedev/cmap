@@ -266,6 +266,8 @@ async function drawMap(options = {}) {
   }
 
   let selectionAnchor = null;
+  /** Упорядоченный маршрут (два клика / path) — для линейки и яркой подсветки. */
+  let routePath = null;
 
   function nodesAreLinked(a, b) {
     return links.some(
@@ -323,9 +325,65 @@ async function drawMap(options = {}) {
     });
   }
 
+  function clearRouteStrip() {
+    routePath = null;
+    const strip = document.getElementById("route-strip");
+    const inner = document.getElementById("route-strip-inner");
+    const label = document.getElementById("route-strip-label");
+    if (strip) strip.hidden = true;
+    if (inner) inner.innerHTML = "";
+    if (label) label.textContent = "";
+    if (mapApp) mapApp.classList.remove("has-route");
+  }
+
+  function renderRouteStrip(path) {
+    const strip = document.getElementById("route-strip");
+    const inner = document.getElementById("route-strip-inner");
+    const label = document.getElementById("route-strip-label");
+    if (!strip || !inner) return;
+    if (!path || path.length < 2) {
+      clearRouteStrip();
+      return;
+    }
+    routePath = path.slice();
+    strip.hidden = false;
+    if (mapApp) mapApp.classList.add("has-route");
+    if (label) label.textContent = t("map.route_bar");
+    inner.innerHTML = "";
+    path.forEach((n, i) => {
+      if (i) {
+        const sep = document.createElement("span");
+        sep.className = "route-sep";
+        sep.setAttribute("aria-hidden", "true");
+        sep.textContent = "→";
+        inner.appendChild(sep);
+      }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "route-chip" + (i === 0 || i === path.length - 1 ? " is-end" : "");
+      btn.title = n.name;
+      const dot = document.createElement("span");
+      dot.className = "route-dot";
+      dot.style.background = nodeColor(n);
+      dot.textContent = String(i + 1);
+      const text = document.createElement("span");
+      text.className = "route-chip-label";
+      text.textContent = innerLabel(n);
+      btn.append(dot, text);
+      btn.addEventListener("click", () => {
+        fillDrawer(n);
+        updateDrawerButton();
+        openDrawerPanel();
+      });
+      inner.appendChild(btn);
+    });
+  }
+
   function applyPathSelection(path, focusNode) {
     selectedNodes.clear();
     path.forEach((n) => selectedNodes.add(n));
+    selectionAnchor = path[0];
+    renderRouteStrip(path);
     highlightConnections();
     fillDrawer(focusNode);
     setNodeQuery(focusNode.name);
@@ -600,6 +658,7 @@ async function drawMap(options = {}) {
           return;
         }
         selectedNodes.delete(d);
+        clearRouteStrip();
         if (!selectedNodes.has(selectionAnchor)) {
           selectionAnchor = selectedNodes.size ? [...selectedNodes][0] : null;
         }
@@ -619,6 +678,7 @@ async function drawMap(options = {}) {
         }
       }
 
+      clearRouteStrip();
       selectedNodes.clear();
       selectedNodes.add(d);
       selectionAnchor = d;
@@ -637,6 +697,7 @@ async function drawMap(options = {}) {
           return;
         }
       }
+      clearRouteStrip();
       selectedNodes.clear();
       selectedNodes.add(d);
       selectionAnchor = d;
@@ -817,6 +878,7 @@ async function drawMap(options = {}) {
     if (linkedEl.checked && !linkedIds.has(d.id)) {
       linkedEl.checked = false;
     }
+    clearRouteStrip();
     selectedNodes.clear();
     selectedNodes.add(d);
     selectionAnchor = d;
@@ -917,6 +979,7 @@ async function drawMap(options = {}) {
         .attr("opacity", 1)
         .attr("stroke", defaultNodeStroke)
         .attr("stroke-width", defaultNodeStrokeWidth);
+      node.selectAll("text.node-label-text").attr("opacity", 1);
       link
         .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
         .attr("opacity", 1)
@@ -925,57 +988,105 @@ async function drawMap(options = {}) {
       return;
     }
 
+    const isRoute = routePath && routePath.length > 1;
+    const routeIds = isRoute ? new Set(routePath.map((n) => n.id)) : null;
     const connectedLinks = new Set();
     const connectedNodes = new Set();
     const chainLinks = new Set();
 
     selectedNodes.forEach((selected) => connectedNodes.add(selected));
 
-    // Рёбра внутри выбранной цепочки
-    links.forEach((link) => {
-      if (selectedNodes.has(link.source) && selectedNodes.has(link.target)) {
-        chainLinks.add(link);
-        connectedLinks.add(link);
+    if (isRoute) {
+      // Только рёбра между соседними шагами маршрута
+      for (let i = 0; i < routePath.length - 1; i++) {
+        const a = routePath[i];
+        const b = routePath[i + 1];
+        links.forEach((link) => {
+          const s = link.source;
+          const t = link.target;
+          if ((s.id === a.id && t.id === b.id) || (s.id === b.id && t.id === a.id)) {
+            chainLinks.add(link);
+            connectedLinks.add(link);
+          }
+        });
       }
-    });
-
-    // Соседи всей цепочки (куда можно кликнуть дальше)
-    selectedNodes.forEach((selected) => {
+      routePath.forEach((n) => connectedNodes.add(n));
+    } else {
       links.forEach((link) => {
-        if (link.source.id === selected.id || link.target.id === selected.id) {
+        if (selectedNodes.has(link.source) && selectedNodes.has(link.target)) {
+          chainLinks.add(link);
           connectedLinks.add(link);
-          connectedNodes.add(link.source);
-          connectedNodes.add(link.target);
         }
       });
-    });
+      selectedNodes.forEach((selected) => {
+        links.forEach((link) => {
+          if (link.source.id === selected.id || link.target.id === selected.id) {
+            connectedLinks.add(link);
+            connectedNodes.add(link.source);
+            connectedNodes.add(link.target);
+          }
+        });
+      });
+    }
+
+    // Маршрутные линии поверх остальных
+    link
+      .order()
+      .filter((d) => chainLinks.has(d))
+      .each(function () {
+        this.parentNode.appendChild(this);
+      });
 
     link
-      .attr("stroke", (d) =>
-        connectedLinks.has(d) ? portColors[parseInt(d.target_port, 10)] || "#666" : "#c8d0dc"
-      )
-      .attr("opacity", (d) => (connectedLinks.has(d) ? 1 : 0.12))
-      .attr("stroke-width", (d) => (chainLinks.has(d) ? 2.5 : connectedLinks.has(d) ? 1.25 : 1));
-    linkLabels.style("visibility", (d) => (connectedLinks.has(d) ? "visible" : "hidden"));
+      .attr("stroke", (d) => {
+        if (chainLinks.has(d)) return "#e11d48";
+        if (connectedLinks.has(d)) return portColors[parseInt(d.target_port, 10)] || "#666";
+        return "#d5dbe5";
+      })
+      .attr("opacity", (d) => {
+        if (chainLinks.has(d)) return 1;
+        if (isRoute) return 0.06;
+        return connectedLinks.has(d) ? 0.55 : 0.08;
+      })
+      .attr("stroke-width", (d) => (chainLinks.has(d) ? 3.75 : connectedLinks.has(d) ? 1.25 : 1));
+    linkLabels.style("visibility", (d) => (chainLinks.has(d) ? "visible" : "hidden"));
     node
       .selectAll("circle")
-      .attr("opacity", (d) => (connectedNodes.has(d) ? 1 : 0.15))
-      .attr("stroke", (d) => (selectedNodes.has(d) ? "#0f9d8a" : defaultNodeStroke(d)))
-      .attr("stroke-width", (d) => (selectedNodes.has(d) ? 3.5 : defaultNodeStrokeWidth(d)));
+      .attr("opacity", (d) => {
+        if (isRoute) return routeIds.has(d.id) ? 1 : 0.12;
+        return connectedNodes.has(d) ? 1 : 0.14;
+      })
+      .attr("stroke", (d) => {
+        if (isRoute && routeIds.has(d.id)) return "#e11d48";
+        if (selectedNodes.has(d)) return "#0f9d8a";
+        return defaultNodeStroke(d);
+      })
+      .attr("stroke-width", (d) => {
+        if (isRoute && routeIds.has(d.id)) return 3.75;
+        if (selectedNodes.has(d)) return 3.25;
+        return defaultNodeStrokeWidth(d);
+      });
+    node.selectAll("text.node-label-text").attr("opacity", (d) => {
+      if (isRoute) return routeIds.has(d.id) ? 1 : 0.2;
+      return connectedNodes.has(d) ? 1 : 0.2;
+    });
   }
 
   function resetHighlight(clearSearch = true) {
     selectedNodes.clear();
     selectionAnchor = null;
+    clearRouteStrip();
     node
       .selectAll("circle")
       .attr("opacity", 1)
       .attr("fill", nodeColor)
       .attr("stroke", defaultNodeStroke)
       .attr("stroke-width", defaultNodeStrokeWidth);
+    node.selectAll("text.node-label-text").attr("opacity", 1);
     link
       .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
-      .attr("opacity", 1);
+      .attr("opacity", 1)
+      .attr("stroke-width", 1.35);
     linkLabels.style("visibility", "hidden");
     clearDrawer();
     closePanels();
@@ -1252,6 +1363,7 @@ async function drawMap(options = {}) {
     softPoll({ forceFresh: true, allowRebuild: true });
   });
   on(document.getElementById("btn-clear-selection"), "click", () => resetHighlight(true));
+  on(document.getElementById("route-strip-close"), "click", () => resetHighlight(true));
 
   const filtToggle = document.getElementById("btn-toggle-filters");
   on(filtToggle, "click", () => {
