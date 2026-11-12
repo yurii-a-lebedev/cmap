@@ -331,7 +331,8 @@ async function drawMap(options = {}) {
     setNodeQuery(focusNode.name);
     updateDrawerButton();
     showRouteStats(path);
-    if (layoutReady) fitToNodes(path, true);
+    // Подгоняем кадр только для длинного маршрута, не к одному узлу
+    if (layoutReady && path.length > 2) fitToNodes(path, true);
   }
 
   let activeProject = "";
@@ -764,7 +765,7 @@ async function drawMap(options = {}) {
     svg.transition().duration(380).ease(d3.easeCubicInOut).call(zoomBehavior.transform, t);
   }
 
-  function beginSelectionFocus(d, { zoom = true } = {}) {
+  function beginSelectionFocus(d) {
     const linkedEl = document.getElementById("flt-linked-only");
     const searchEl = document.getElementById("search-box");
     if (!filterSnapshot) {
@@ -784,12 +785,12 @@ async function drawMap(options = {}) {
     highlightConnections();
     fillDrawer(d);
     updateDrawerButton();
-    if (zoom) focusNode(d);
+    // Не зумим к одному узлу — камера остаётся как есть
     setNodeQuery(d.name);
   }
 
   function selectAndShow(d) {
-    beginSelectionFocus(d, { zoom: true });
+    beginSelectionFocus(d);
   }
 
   function setNodeQuery(name) {
@@ -1013,7 +1014,7 @@ async function drawMap(options = {}) {
         )
         .attr("stroke-width", (d) => (matches.includes(d) ? 3 : d.state === "external" ? 2 : 1.25));
       if (matches.length === 1) {
-        beginSelectionFocus(matches[0], { zoom: true });
+        beginSelectionFocus(matches[0]);
       } else if (matches.length > 1 && refit) {
         fitToNodes(matches, true);
       }
