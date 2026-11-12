@@ -259,8 +259,25 @@ async function drawMap(options = {}) {
     const drawerBtn = document.getElementById("btn-toggle-drawer");
     if (!drawerBtn) return;
     drawerBtn.classList.toggle("has-selection", selectedNodes.size > 0);
-    const sel = selectedNodes.size ? [...selectedNodes][0] : null;
-    drawerBtn.title = sel ? t("map.node_named", { name: sel.name }) : t("map.node_card");
+    const sel = selectedNodes.size ? [...selectedNodes] : [];
+    if (!sel.length) drawerBtn.title = t("map.node_card");
+    else if (sel.length === 1) drawerBtn.title = t("map.node_named", { name: sel[0].name });
+    else drawerBtn.title = t("map.node_named", { name: `${sel.length}` });
+  }
+
+  function nodesAreLinked(a, b) {
+    return links.some(
+      (l) =>
+        (l.source.id === a.id && l.target.id === b.id) ||
+        (l.source.id === b.id && l.target.id === a.id)
+    );
+  }
+
+  function isAdjacentToSelection(d) {
+    for (const sel of selectedNodes) {
+      if (nodesAreLinked(sel, d)) return true;
+    }
+    return false;
   }
 
   let activeProject = "";
@@ -519,12 +536,20 @@ async function drawMap(options = {}) {
         .call(drag(simulation))
         .on("click", (event, d) => {
       event.stopPropagation();
-      if (selectedNodes.has(d) && selectedNodes.size === 1) {
-        resetHighlight(true);
-        return;
+      if (selectedNodes.has(d)) {
+        if (selectedNodes.size === 1) {
+          resetHighlight(true);
+          return;
+        }
+        // Убрать узел из цепочки
+        selectedNodes.delete(d);
+      } else if (selectedNodes.size && isAdjacentToSelection(d)) {
+        // Продолжить цепочку связанным узлом
+        selectedNodes.add(d);
+      } else {
+        selectedNodes.clear();
+        selectedNodes.add(d);
       }
-      selectedNodes.clear();
-      selectedNodes.add(d);
       highlightConnections();
       fillDrawer(d);
       setNodeQuery(d.name);
@@ -533,9 +558,11 @@ async function drawMap(options = {}) {
     })
     .on("dblclick", (event, d) => {
       event.stopPropagation();
-      selectedNodes.clear();
+      if (!(selectedNodes.size && (selectedNodes.has(d) || isAdjacentToSelection(d)))) {
+        selectedNodes.clear();
+      }
       selectedNodes.add(d);
-            highlightConnections();
+      highlightConnections();
       fillDrawer(d);
       setNodeQuery(d.name);
       updateDrawerButton();
@@ -768,9 +795,13 @@ async function drawMap(options = {}) {
       .replaceAll(">", "&gt;");
   }
 
-    function highlightConnections() {
+  function highlightConnections() {
     if (!selectedNodes.size) {
-      node.selectAll("circle").attr("opacity", 1);
+      node
+        .selectAll("circle")
+        .attr("opacity", 1)
+        .attr("stroke", (d) => (d.state === "external" ? "#2f6fed" : "#c8d0dc"))
+        .attr("stroke-width", (d) => (d.state === "external" ? 2 : 1.25));
       link
         .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
         .attr("opacity", 1);
@@ -778,28 +809,45 @@ async function drawMap(options = {}) {
       return;
     }
 
-        const connectedLinks = new Set();
-        const connectedNodes = new Set();
+    const connectedLinks = new Set();
+    const connectedNodes = new Set();
+    const chainLinks = new Set();
+
+    selectedNodes.forEach((selected) => connectedNodes.add(selected));
+
+    // Рёбра внутри выбранной цепочки
+    links.forEach((link) => {
+      if (selectedNodes.has(link.source) && selectedNodes.has(link.target)) {
+        chainLinks.add(link);
+        connectedLinks.add(link);
+      }
+    });
+
+    // Соседи всей цепочки (куда можно кликнуть дальше)
     selectedNodes.forEach((selected) => {
-      connectedNodes.add(selected);
       links.forEach((link) => {
         if (link.source.id === selected.id || link.target.id === selected.id) {
-                    connectedLinks.add(link);
-                    connectedNodes.add(link.source);
+          connectedLinks.add(link);
+          connectedNodes.add(link.source);
           connectedNodes.add(link.target);
-                }
-            });
-        });
+        }
+      });
+    });
 
     link
       .attr("stroke", (d) =>
         connectedLinks.has(d) ? portColors[parseInt(d.target_port, 10)] || "#666" : "#c8d0dc"
       )
-      .attr("opacity", (d) => (connectedLinks.has(d) ? 1 : 0.12));
+      .attr("opacity", (d) => (connectedLinks.has(d) ? 1 : 0.12))
+      .attr("stroke-width", (d) => (chainLinks.has(d) ? 2.5 : connectedLinks.has(d) ? 1.25 : 1));
     linkLabels.style("visibility", (d) => (connectedLinks.has(d) ? "visible" : "hidden"));
     node
       .selectAll("circle")
-      .attr("opacity", (d) => (connectedNodes.has(d) ? 1 : 0.15));
+      .attr("opacity", (d) => (connectedNodes.has(d) ? 1 : 0.15))
+      .attr("stroke", (d) =>
+        selectedNodes.has(d) ? "#0f9d8a" : d.state === "external" ? "#2f6fed" : "#c8d0dc"
+      )
+      .attr("stroke-width", (d) => (selectedNodes.has(d) ? 3.25 : d.state === "external" ? 2 : 1.25));
   }
 
   function resetHighlight(clearSearch = true) {
