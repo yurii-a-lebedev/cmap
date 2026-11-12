@@ -265,6 +265,8 @@ async function drawMap(options = {}) {
     else drawerBtn.title = t("map.node_named", { name: `${sel.length}` });
   }
 
+  let selectionAnchor = null;
+
   function nodesAreLinked(a, b) {
     return links.some(
       (l) =>
@@ -278,6 +280,58 @@ async function drawMap(options = {}) {
       if (nodesAreLinked(sel, d)) return true;
     }
     return false;
+  }
+
+  /** Кратчайший путь по связям connect_to (без учёта направления). */
+  function shortestPath(start, end) {
+    if (!start || !end) return null;
+    if (start.id === end.id) return [start];
+    const adj = new Map();
+    nodes.forEach((n) => adj.set(n.id, []));
+    links.forEach((l) => {
+      const s = l.source;
+      const t = l.target;
+      if (!adj.has(s.id) || !adj.has(t.id)) return;
+      adj.get(s.id).push(t);
+      adj.get(t.id).push(s);
+    });
+    const prev = new Map([[start.id, null]]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i];
+      if (cur.id === end.id) break;
+      for (const nb of adj.get(cur.id) || []) {
+        if (prev.has(nb.id)) continue;
+        prev.set(nb.id, cur);
+        queue.push(nb);
+      }
+    }
+    if (!prev.has(end.id)) return null;
+    const path = [];
+    for (let cur = end; cur; cur = prev.get(cur.id)) path.push(cur);
+    path.reverse();
+    return path;
+  }
+
+  function showRouteStats(path) {
+    const stats = document.getElementById("map-stats");
+    if (!stats || !path || path.length < 2) return;
+    stats.textContent = t("map.route", {
+      from: path[0].name,
+      to: path[path.length - 1].name,
+      hops: path.length - 1,
+    });
+  }
+
+  function applyPathSelection(path, focusNode) {
+    selectedNodes.clear();
+    path.forEach((n) => selectedNodes.add(n));
+    highlightConnections();
+    fillDrawer(focusNode);
+    setNodeQuery(focusNode.name);
+    updateDrawerButton();
+    showRouteStats(path);
+    if (layoutReady) fitToNodes(path, true);
   }
 
   let activeProject = "";
@@ -541,27 +595,47 @@ async function drawMap(options = {}) {
           resetHighlight(true);
           return;
         }
-        // Убрать узел из цепочки
         selectedNodes.delete(d);
-      } else if (selectedNodes.size && isAdjacentToSelection(d)) {
-        // Продолжить цепочку связанным узлом
-        selectedNodes.add(d);
-      } else {
-        selectedNodes.clear();
-        selectedNodes.add(d);
+        if (!selectedNodes.has(selectionAnchor)) {
+          selectionAnchor = selectedNodes.size ? [...selectedNodes][0] : null;
+        }
+        highlightConnections();
+        fillDrawer(d);
+        setNodeQuery(d.name);
+        updateDrawerButton();
+        return;
       }
+
+      // Второй узел (в т.ч. на другом конце карты) → кратчайший маршрут
+      if (selectionAnchor && selectedNodes.size && selectionAnchor.id !== d.id) {
+        const path = shortestPath(selectionAnchor, d);
+        if (path && path.length > 1) {
+          applyPathSelection(path, d);
+          return;
+        }
+      }
+
+      selectedNodes.clear();
+      selectedNodes.add(d);
+      selectionAnchor = d;
       highlightConnections();
       fillDrawer(d);
       setNodeQuery(d.name);
       updateDrawerButton();
-      // Шторку не открываем автоматически — только подсветка на карте
     })
     .on("dblclick", (event, d) => {
       event.stopPropagation();
-      if (!(selectedNodes.size && (selectedNodes.has(d) || isAdjacentToSelection(d)))) {
-        selectedNodes.clear();
+      if (selectionAnchor && selectionAnchor.id !== d.id) {
+        const path = shortestPath(selectionAnchor, d);
+        if (path && path.length > 1) {
+          applyPathSelection(path, d);
+          openDrawerPanel();
+          return;
+        }
       }
+      selectedNodes.clear();
       selectedNodes.add(d);
+      selectionAnchor = d;
       highlightConnections();
       fillDrawer(d);
       setNodeQuery(d.name);
@@ -705,6 +779,7 @@ async function drawMap(options = {}) {
     }
     selectedNodes.clear();
     selectedNodes.add(d);
+    selectionAnchor = d;
     applyFilters();
     highlightConnections();
     fillDrawer(d);
@@ -852,6 +927,7 @@ async function drawMap(options = {}) {
 
   function resetHighlight(clearSearch = true) {
     selectedNodes.clear();
+    selectionAnchor = null;
     node
       .selectAll("circle")
       .attr("opacity", 1)
