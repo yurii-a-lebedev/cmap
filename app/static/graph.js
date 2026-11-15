@@ -748,18 +748,18 @@ async function drawMap(options = {}) {
       y2: to.y,
     };
   }
-  function gutterX() {
-    let max = 0;
-    nodes.forEach((n) => {
-      if (Number.isFinite(n.x)) max = Math.max(max, n.x);
-    });
-    return max + CARD_W / 2 + 36;
-  }
   function edgeIsLocal(from, to) {
     const a = projectKey(from);
     const b = projectKey(to);
     if (a && a === b) return true;
     return Math.abs((from.y || 0) - (to.y || 0)) <= CARD_H + 24;
+  }
+  function busY() {
+    let min = Infinity;
+    nodes.forEach((n) => {
+      if (Number.isFinite(n.y)) min = Math.min(min, n.y);
+    });
+    return (Number.isFinite(min) ? min : 0) - CARD_H / 2 - 26;
   }
   function edgePath(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
@@ -769,13 +769,15 @@ async function drawMap(options = {}) {
       const c2x = x2 + (x1 <= x2 ? -dx : dx);
       return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
     }
-    const gx = gutterX();
-    const into = to.x + CARD_W / 2;
-    return `M${x1},${y1}H${gx}V${y2}H${into}`;
+    // Дальняя связь идёт над карточками: короткий выход вбок, шина сверху, вход в цель.
+    const yb = busY();
+    const xFrom = from.x + CARD_W / 2 + 12;
+    const xTo = to.x + CARD_W / 2 + 12;
+    return `M${from.x + CARD_W / 2},${from.y}H${xFrom}V${yb}H${xTo}V${to.y}H${to.x + CARD_W / 2}`;
   }
   function edgeMid(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    if (!edgeIsLocal(from, to)) return { x: gutterX(), y: (y1 + y2) / 2 };
+    if (!edgeIsLocal(from, to)) return { x: (from.x + to.x) / 2, y: busY() };
     const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
     const c1x = x1 + (x1 <= x2 ? dx : -dx);
     const c2x = x2 + (x1 <= x2 ? -dx : dx);
@@ -1382,7 +1384,7 @@ async function drawMap(options = {}) {
     const ys = nodes.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
     const padX = CARD_W / 2 + 56;
-    const padY = CARD_H / 2 + 28;
+    const padY = CARD_H / 2 + 48;
     const minX = Math.min(...xs) - padX;
     const maxX = Math.max(...xs) + padX;
     const minY = Math.min(...ys) - padY;
@@ -1414,8 +1416,8 @@ async function drawMap(options = {}) {
     const xs = subset.map((n) => n.x).filter(Number.isFinite);
     const ys = subset.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
-    const padX = CARD_W / 2 + 36;
-    const padY = CARD_H / 2 + 36;
+    const padX = CARD_W / 2 + 40;
+    const padY = CARD_H / 2 + 48;
     const minX = Math.min(...xs) - padX;
     const maxX = Math.max(...xs) + padX;
     const minY = Math.min(...ys) - padY;
