@@ -154,14 +154,12 @@ async function drawMap(options = {}) {
     nbrIds.get(l.target).push(l.source);
   });
   const externalLeafIds = new Set();
-  const leafExternalTarget = new Map();
   nodes.forEach((n) => {
     if (n.state === "external") return;
     const ids = nbrIds.get(n.id) || [];
     if (!ids.length) return;
     if (ids.every((id) => String(id).startsWith("external:"))) {
       externalLeafIds.add(n.id);
-      leafExternalTarget.set(n.id, ids[0]);
     }
   });
 
@@ -404,26 +402,82 @@ async function drawMap(options = {}) {
     y: height * 0.1,
   };
 
+  const CARD_W = 168;
+  const CARD_H = 46;
+  const COL_GAP = 240;
+
+  // Глубина directed connect_to: корни слева, циклы не углубляют.
+  const depthById = new Map();
+  const outgoing = new Map();
+  const indegree = new Map();
+  nodes.forEach((n) => {
+    outgoing.set(n.id, []);
+    indegree.set(n.id, 0);
+  });
+  links.forEach((l) => {
+    const s = l.source != null && typeof l.source === "object" ? l.source.id : l.source;
+    const t = l.target != null && typeof l.target === "object" ? l.target.id : l.target;
+    if (!outgoing.has(s) || !indegree.has(t)) return;
+    outgoing.get(s).push(t);
+    indegree.set(t, indegree.get(t) + 1);
+  });
+
+  function deepenFrom(startIds) {
+    const queue = startIds.slice();
+    for (let qi = 0; qi < queue.length; qi++) {
+      const id = queue[qi];
+      const nextDepth = depthById.get(id) + 1;
+      const tos = outgoing.get(id) || [];
+      for (let j = 0; j < tos.length; j++) {
+        const to = tos[j];
+        if (depthById.has(to)) continue;
+        depthById.set(to, nextDepth);
+        queue.push(to);
+      }
+    }
+  }
+
+  const roots = [];
+  nodes.forEach((n) => {
+    if ((indegree.get(n.id) || 0) === 0) {
+      depthById.set(n.id, 0);
+      roots.push(n.id);
+    }
+  });
+  deepenFrom(roots);
+  nodes.forEach((n) => {
+    if (depthById.has(n.id)) return;
+    depthById.set(n.id, 0);
+    deepenFrom([n.id]);
+  });
+
+  function columnX(id) {
+    return 120 + (depthById.get(id) || 0) * COL_GAP;
+  }
+
   let restoredCount = 0;
-  let leafOrbit = 0;
-  nodes.forEach((n, i) => {
+  const unplaced = [];
+  nodes.forEach((n) => {
     if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y) && !externalLeafIds.has(n.id)) {
       n.x = saved[n.id].x;
       n.y = saved[n.id].y;
       restoredCount += 1;
-    } else if (externalLeafIds.has(n.id)) {
-      // Сразу у шлюза, а не внутри чужой звезды
-      const c = projectCenters.external;
-      const angle = -Math.PI / 2 + (leafOrbit++ - 0.5) * 0.55;
-      n.x = c.x + Math.cos(angle) * 120;
-      n.y = c.y + Math.sin(angle) * 90 + 70;
     } else {
-      const key = n.state === "external" ? "external" : n.project || "_none";
-      const c = projectCenters[key] || projectCenters._none;
-      const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-      n.x = c.x + Math.cos(angle) * 40;
-      n.y = c.y + Math.sin(angle) * 40;
+      unplaced.push(n);
     }
+  });
+  const byDepth = new Map();
+  unplaced.forEach((n) => {
+    const depth = depthById.get(n.id) || 0;
+    if (!byDepth.has(depth)) byDepth.set(depth, []);
+    byDepth.get(depth).push(n);
+  });
+  byDepth.forEach((group) => {
+    group.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    group.forEach((n, index) => {
+      n.x = columnX(n.id);
+      n.y = 80 + index * (CARD_H + 22);
+    });
   });
 
   const svg = d3.select(svgEl).attr("viewBox", `0 0 ${width} ${height}`);
@@ -447,85 +501,70 @@ async function drawMap(options = {}) {
       return !event.button;
     })
     .on("zoom", (event) => {
-            g.attr("transform", event.transform);
+      g.attr("transform", event.transform);
       // Ручной pan/zoom — не перетягивать кадр автофитом
       if (event.sourceEvent && framingLive) framingLive = false;
     });
   svg.call(zoomBehavior);
 
-  // Osmos-like: слабые пружины, сильное отталкивание, вязкая среда
   function clusterStrength() {
     return document.getElementById("flt-cluster").checked ? 0.12 : 0.015;
   }
 
-  /** Выпрямляет цепочки A—B—C: B тянется к линии между A и C (не хабы). */
-  function forceStraighten(strength = 0.07) {
-    let nodesArr;
+  function forceCardCollide(strength = 0.9) {
+    let nodesArr = [];
+    const padX = CARD_W + 36;
+    const padY = CARD_H + 20;
     function force(alpha) {
-      const adj = new Map();
-      links.forEach((l) => {
-        const s = l.source;
-        const t = l.target;
-        if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
-        if (!adj.has(s.id)) adj.set(s.id, []);
-        if (!adj.has(t.id)) adj.set(t.id, []);
-        adj.get(s.id).push(t);
-        adj.get(t.id).push(s);
-      });
       const k = strength * alpha;
-      nodesArr.forEach((n) => {
-        if (n.fx != null || n.fy != null) return;
-        const nb = adj.get(n.id);
-        if (!nb || nb.length < 2 || nb.length > 3) return;
-        const pairW = nb.length === 2 ? 1 : 0.3;
-        for (let i = 0; i < nb.length; i++) {
-          for (let j = i + 1; j < nb.length; j++) {
-            const a = nb[i];
-            const b = nb[j];
-            // проекция n на отрезок ab → выпрямление без сжатия в точку
-            const abx = b.x - a.x;
-            const aby = b.y - a.y;
-            const len2 = abx * abx + aby * aby || 1;
-            let t = ((n.x - a.x) * abx + (n.y - a.y) * aby) / len2;
-            t = Math.max(0.2, Math.min(0.8, t));
-            const px = a.x + abx * t;
-            const py = a.y + aby * t;
-            n.vx += (px - n.x) * k * pairW;
-            n.vy += (py - n.y) * k * pairW;
+      for (let i = 0; i < nodesArr.length; i++) {
+        const a = nodesArr[i];
+        for (let j = i + 1; j < nodesArr.length; j++) {
+          const b = nodesArr[j];
+          if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const adx = Math.abs(dx);
+          const ady = Math.abs(dy);
+          if (adx >= padX || ady >= padY) continue;
+          const ox = padX - adx;
+          const oy = padY - ady;
+          if (ox < oy) {
+            if (a.fx != null && b.fx != null) continue;
+            const sx = dx < 0 ? -1 : 1;
+            const push = ox * k;
+            if (a.fx == null && b.fx == null) {
+              a.vx -= (sx * push) / 2;
+              b.vx += (sx * push) / 2;
+            } else if (a.fx == null) {
+              a.vx -= sx * push;
+            } else {
+              b.vx += sx * push;
+            }
+          } else {
+            if (a.fy != null && b.fy != null) continue;
+            const sy = dy < 0 ? -1 : 1;
+            const push = oy * k;
+            if (a.fy == null && b.fy == null) {
+              a.vy -= (sy * push) / 2;
+              b.vy += (sy * push) / 2;
+            } else if (a.fy == null) {
+              a.vy -= sy * push;
+            } else {
+              b.vy += sy * push;
+            }
           }
         }
-      });
+      }
     }
-    force.initialize = (n) => {
-      nodesArr = n;
+    force.initialize = (arr) => {
+      nodesArr = arr;
     };
     return force;
   }
 
-  function forceExternalLeaves(strength = 0.16) {
-    let nodesArr;
-    const byId = () => new Map(nodesArr.map((n) => [n.id, n]));
-    function force(alpha) {
-      const map = byId();
-      const k = strength * alpha;
-      externalLeafIds.forEach((id) => {
-        const n = map.get(id);
-        const ext = map.get(leafExternalTarget.get(id));
-        if (!n || !ext || !Number.isFinite(ext.x) || !Number.isFinite(ext.y)) return;
-        if (n.fx != null || n.fy != null) return;
-        // держим лист рядом со шлюзом, сбоку — чтобы не лезть в чужие лучи
-        const tx = ext.x + (n.x >= ext.x ? 110 : -110);
-        const ty = ext.y + 95;
-        n.vx += (tx - n.x) * k;
-        n.vy += (ty - n.y) * k;
-      });
-    }
-    force.initialize = (n) => {
-      nodesArr = n;
-    };
-    return force;
-  }
-
+  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
+  let columnPull = layoutMostlyRestored ? 0.02 : 0.35;
   const simulation = d3
     .forceSimulation(nodes)
     .force(
@@ -533,48 +572,27 @@ async function drawMap(options = {}) {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance((l) => (l.resolved === "external" ? 300 : 260))
-        .strength((l) => (l.resolved === "external" ? 0.26 : 0.14))
+        .distance((l) => (l.resolved === "external" ? 280 : COL_GAP))
+        .strength(0.18)
     )
-    .force(
-      "charge",
-      d3
-        .forceManyBody()
-        .strength(-920)
-        .distanceMin(40)
-        .distanceMax(720)
-    )
-    .force("collide", d3.forceCollide().radius(84).strength(0.5).iterations(2))
-    .force("straighten", forceStraighten(0.08))
-    .force("externalLeaves", forceExternalLeaves(0.18))
-    .force("centerX", d3.forceX(width / 2).strength(0.018))
-    .force("centerY", d3.forceY(height / 2).strength(0.018))
-    .force(
-      "x",
-      d3
-        .forceX((d) => {
-          if (externalLeafIds.has(d.id)) return projectCenters.external.x;
-          const key = d.state === "external" ? "external" : d.project || "_none";
-          return (projectCenters[key] || projectCenters._none).x;
-        })
-        .strength((d) => (externalLeafIds.has(d.id) ? 0.08 : clusterStrength()))
-    )
+    .force("charge", d3.forceManyBody().strength(-280).distanceMin(20).distanceMax(520))
+    .force("collide", forceCardCollide(0.9))
+    .force("centerY", d3.forceY(height / 2).strength(0.01))
+    .force("x", d3.forceX((d) => columnX(d.id)).strength(columnPull))
     .force(
       "y",
       d3
         .forceY((d) => {
-          if (externalLeafIds.has(d.id)) return projectCenters.external.y + 80;
           const key = d.state === "external" ? "external" : d.project || "_none";
           return (projectCenters[key] || projectCenters._none).y;
         })
-        .strength((d) => (externalLeafIds.has(d.id) ? 0.1 : clusterStrength()))
+        .strength(layoutMostlyRestored ? 0.01 : 0.04)
     )
     .velocityDecay(0.55)
     .alphaDecay(0.012)
     .alphaMin(0.0008);
 
   // Если раскладка уже сохранена — не взрывать граф и не гонять камеру за тиками
-  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
   if (layoutMostlyRestored) {
     simulation.alpha(0.04);
     framingLive = false;
@@ -583,10 +601,11 @@ async function drawMap(options = {}) {
 
   const link = g
     .append("g")
-        .selectAll("line")
+        .selectAll("path")
         .data(links)
-        .join("line")
+        .join("path")
     .attr("class", "link-line")
+    .attr("fill", "none")
     .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#9aa6b5")
     .attr("stroke-width", 1.35)
     .attr("stroke-opacity", 0.45);
@@ -617,20 +636,53 @@ async function drawMap(options = {}) {
         .text(d.target_port);
         });
 
-    const defs = svg.append("defs");
-  defs
-    .append("marker")
-        .attr("id", "arrow")
-        .attr("viewBox", "0 -5 10 10")
-    .attr("refX", 28)
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-        .append("path")
-        .attr("d", "M0,-5L10,0L0,5")
-    .attr("fill", "#9aa6b5");
-    link.attr("marker-end", "url(#arrow)");
+  const defs = svg.append("defs");
+  function addArrowMarker(id, fill, refX = 9) {
+    defs
+      .append("marker")
+      .attr("id", id)
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", refX)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-5L10,0L0,5")
+      .attr("fill", fill);
+  }
+  addArrowMarker("arrow", "#9aa6b5", 9);
+  addArrowMarker("arrow-route", "#e11d48", 9);
+  link.attr("marker-end", "url(#arrow)");
+  /** Направление ребра маршрута: link → {from, to} */
+  let routeLinkDir = new Map();
+
+  function edgeEnds(from, to) {
+    const ltr = from.x <= to.x;
+    return {
+      x1: from.x + (ltr ? CARD_W / 2 : -CARD_W / 2),
+      y1: from.y,
+      x2: to.x + (ltr ? -CARD_W / 2 : CARD_W / 2),
+      y2: to.y,
+    };
+  }
+  function edgePath(from, to) {
+    const { x1, y1, x2, y2 } = edgeEnds(from, to);
+    const dx = Math.max(48, Math.abs(x2 - x1) * 0.45);
+    const c1x = x1 + (x1 <= x2 ? dx : -dx);
+    const c2x = x2 + (x1 <= x2 ? -dx : dx);
+    return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
+  }
+  function edgeMid(from, to) {
+    const { x1, y1, x2, y2 } = edgeEnds(from, to);
+    const dx = Math.max(48, Math.abs(x2 - x1) * 0.45);
+    const c1x = x1 + (x1 <= x2 ? dx : -dx);
+    const c2x = x2 + (x1 <= x2 ? -dx : dx);
+    return {
+      x: 0.125 * x1 + 0.375 * c1x + 0.375 * c2x + 0.125 * x2,
+      y: (y1 + y2) / 2,
+    };
+  }
 
   const node = g
     .append("g")
@@ -701,40 +753,71 @@ async function drawMap(options = {}) {
   node.append("title").text((d) => d.name);
 
   node
-    .append("circle")
-    .attr("class", "node-circle")
-    .attr("r", (d) => nodeRadius(d))
-    .attr("fill", nodeColor)
+    .append("rect")
+    .attr("class", "node-card")
+    .attr("x", -CARD_W / 2)
+    .attr("y", -CARD_H / 2)
+    .attr("width", CARD_W)
+    .attr("height", CARD_H)
+    .attr("rx", 10)
+    .attr("ry", 10)
+    .attr("fill", "#ffffff")
     .attr("stroke", defaultNodeStroke)
     .attr("stroke-width", defaultNodeStrokeWidth)
     .attr("stroke-dasharray", (d) => (d.state === "external" ? "4 3" : null));
 
-  // Имя внутри круга
+  node
+    .append("circle")
+    .attr("class", "node-dot")
+    .attr("cx", -CARD_W / 2 + 18)
+    .attr("cy", 0)
+    .attr("r", 8)
+    .attr("fill", nodeColor)
+    .attr("pointer-events", "none");
+
   node
     .append("text")
-    .attr("class", "node-label-text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .style("pointer-events", "none")
-    .style("font-weight", "700")
-    .style("font-size", (d) => (innerLabel(d).length > 7 ? "10px" : "12px"))
-    .style("fill", (d) => labelColor(d))
-    .style("paint-order", "stroke")
-    .style("stroke", "rgba(0,0,0,0.28)")
-    .style("stroke-width", "2.5px")
-    .text((d) => innerLabel(d));
+    .attr("class", "node-kind")
+    .attr("x", -CARD_W / 2 + 34)
+    .attr("y", -6)
+    .attr("text-anchor", "start")
+    .attr("font-size", "10px")
+    .attr("fill", "#64748b")
+    .attr("pointer-events", "none")
+    .text(nodeKindText);
 
-    simulation.on("tick", () => {
+  node
+    .append("text")
+    .attr("class", "node-name")
+    .attr("x", -CARD_W / 2 + 34)
+    .attr("y", 12)
+    .attr("text-anchor", "start")
+    .attr("font-size", "13px")
+    .attr("font-weight", 700)
+    .attr("fill", nodeNameFill)
+    .attr("pointer-events", "none")
+    .text((d) => truncate(displayName(d), 16));
+
+  function redrawEdges() {
+    function ends(d) {
+      const dir = routeLinkDir.get(d);
+      if (dir) return { from: dir.from, to: dir.to };
+      return { from: d.source, to: d.target };
+    }
+    link.attr("d", (d) => {
+      const { from, to } = ends(d);
+      return edgePath(from, to);
+    });
+    linkLabels.attr("transform", (d) => {
+      const { from, to } = ends(d);
+      const mid = edgeMid(from, to);
+      return `translate(${mid.x},${mid.y})`;
+    });
+  }
+
+  simulation.on("tick", () => {
     if (destroyed) return;
-    link
-      .attr("x1", (d) => d.source.x)
-      .attr("y1", (d) => d.source.y)
-      .attr("x2", (d) => d.target.x)
-      .attr("y2", (d) => d.target.y);
-    linkLabels.attr(
-      "transform",
-      (d) => `translate(${(d.source.x + d.target.x) / 2},${(d.source.y + d.target.y) / 2})`
-    );
+    redrawEdges();
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
     if (framingLive && ++frameTick % 2 === 0) fitToScreen(false);
   });
@@ -748,7 +831,13 @@ async function drawMap(options = {}) {
 
   function reheat(alpha = 0.2) {
     unpinLayout();
-    simulation.alpha(Math.min(alpha, 0.35)).restart();
+    const next = Math.min(alpha, 0.35);
+    // Reset зовёт reheat(0.3). На уже восстановленной карте X был 0.02 — включаем колонки.
+    if (next >= 0.3 && columnPull <= 0.02) {
+      columnPull = 0.35;
+      simulation.force("x").strength(columnPull);
+    }
+    simulation.alpha(next).restart();
   }
 
   function startLiveFraming() {
@@ -797,9 +886,13 @@ async function drawMap(options = {}) {
     return serviceColor(serviceKey(d));
   }
 
-  function labelColor(d) {
-    if (d.state === "external") return "#1c3a7a";
-    return "#ffffff";
+  function nodeKindText(d) {
+    return d.state === "external" ? "external" : d.project || d.state || "service";
+  }
+
+  function nodeNameFill(d) {
+    if (d.state === "stopped" || d.state === "exited" || d.state === "dead") return "#4b5563";
+    return "#1c2430";
   }
 
   function defaultNodeStroke(d) {
@@ -814,7 +907,7 @@ async function drawMap(options = {}) {
     return d.state === "external" ? 28 : 34;
   }
 
-  function innerLabel(d) {
+  function displayName(d) {
     const raw = String(d.name || "");
     const proj = (d.project || "").toLowerCase();
     let name = raw;
@@ -824,7 +917,25 @@ async function drawMap(options = {}) {
     if (proj && name.toLowerCase().startsWith(proj + "_")) {
       name = name.slice(proj.length + 1);
     }
-    return truncate(name, 10);
+    return name;
+  }
+
+  function innerLabel(d) {
+    return truncate(displayName(d), 10);
+  }
+
+  /** 1–2 строки для подписи внутри круга */
+  function labelLines(d) {
+    const name = displayName(d);
+    if (name.length <= 8) return [name];
+    const parts = name.split(/[-_./]/).filter(Boolean);
+    if (parts.length >= 2) {
+      const a = truncate(parts[0], 8);
+      const b = truncate(parts.slice(1).join("-"), 8);
+      return b ? [a, b] : [truncate(name, 10)];
+    }
+    const mid = Math.ceil(name.length / 2);
+    return [truncate(name.slice(0, mid), 8), truncate(name.slice(mid), 8)];
   }
 
   function truncate(s, n) {
@@ -948,17 +1059,19 @@ async function drawMap(options = {}) {
 
   function highlightConnections() {
     if (!selectedNodes.size) {
+      routeLinkDir = new Map();
+      node.attr("opacity", 1);
       node
-        .selectAll("circle")
-        .attr("opacity", 1)
+        .selectAll("rect.node-card")
         .attr("stroke", defaultNodeStroke)
         .attr("stroke-width", defaultNodeStrokeWidth);
-      node.selectAll("text.node-label-text").attr("opacity", 1);
       link
         .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
         .attr("opacity", 1)
-        .attr("stroke-width", 1.35);
+        .attr("stroke-width", 1.35)
+        .attr("marker-end", "url(#arrow)");
       linkLabels.style("visibility", "hidden");
+      redrawEdges();
       return;
     }
 
@@ -967,37 +1080,39 @@ async function drawMap(options = {}) {
     const connectedLinks = new Set();
     const connectedNodes = new Set();
     const chainLinks = new Set();
+    routeLinkDir = new Map();
 
     selectedNodes.forEach((selected) => connectedNodes.add(selected));
 
     if (isRoute) {
-      // Только рёбра между соседними шагами маршрута
+      // Только рёбра между соседними шагами маршрута + направление стрелки
       for (let i = 0; i < routePath.length - 1; i++) {
         const a = routePath[i];
         const b = routePath[i + 1];
-        links.forEach((link) => {
-          const s = link.source;
-          const t = link.target;
+        links.forEach((lnk) => {
+          const s = lnk.source;
+          const t = lnk.target;
           if ((s.id === a.id && t.id === b.id) || (s.id === b.id && t.id === a.id)) {
-            chainLinks.add(link);
-            connectedLinks.add(link);
+            chainLinks.add(lnk);
+            connectedLinks.add(lnk);
+            routeLinkDir.set(lnk, { from: a, to: b });
           }
         });
       }
       routePath.forEach((n) => connectedNodes.add(n));
     } else {
-      links.forEach((link) => {
-        if (selectedNodes.has(link.source) && selectedNodes.has(link.target)) {
-          chainLinks.add(link);
-          connectedLinks.add(link);
+      links.forEach((lnk) => {
+        if (selectedNodes.has(lnk.source) && selectedNodes.has(lnk.target)) {
+          chainLinks.add(lnk);
+          connectedLinks.add(lnk);
         }
       });
       selectedNodes.forEach((selected) => {
-        links.forEach((link) => {
-          if (link.source.id === selected.id || link.target.id === selected.id) {
-            connectedLinks.add(link);
-            connectedNodes.add(link.source);
-            connectedNodes.add(link.target);
+        links.forEach((lnk) => {
+          if (lnk.source.id === selected.id || lnk.target.id === selected.id) {
+            connectedLinks.add(lnk);
+            connectedNodes.add(lnk.source);
+            connectedNodes.add(lnk.target);
           }
         });
       });
@@ -1005,7 +1120,11 @@ async function drawMap(options = {}) {
 
     // Маршрутные линии поверх остальных
     link
-      .order()
+      .filter((d) => chainLinks.has(d))
+      .each(function () {
+        this.parentNode.appendChild(this);
+      });
+    linkLabels
       .filter((d) => chainLinks.has(d))
       .each(function () {
         this.parentNode.appendChild(this);
@@ -1022,46 +1141,51 @@ async function drawMap(options = {}) {
         if (isRoute) return 0.06;
         return connectedLinks.has(d) ? 0.55 : 0.08;
       })
-      .attr("stroke-width", (d) => (chainLinks.has(d) ? 3.75 : connectedLinks.has(d) ? 1.25 : 1));
-    linkLabels.style("visibility", (d) => (chainLinks.has(d) ? "visible" : "hidden"));
+      .attr("stroke-width", (d) => (chainLinks.has(d) ? 3.75 : connectedLinks.has(d) ? 1.25 : 1))
+      .attr("marker-end", (d) => {
+        if (chainLinks.has(d) && isRoute) return "url(#arrow-route)";
+        if (isRoute) return null;
+        return connectedLinks.has(d) ? "url(#arrow)" : null;
+      });
+    // Порты — только на рёбрах маршрута
+    linkLabels.style("visibility", (d) => (isRoute && chainLinks.has(d) ? "visible" : "hidden"));
+    node.attr("opacity", (d) => {
+      if (isRoute) return routeIds.has(d.id) ? 1 : 0.12;
+      return connectedNodes.has(d) ? 1 : 0.14;
+    });
     node
-      .selectAll("circle")
-      .attr("opacity", (d) => {
-        if (isRoute) return routeIds.has(d.id) ? 1 : 0.12;
-        return connectedNodes.has(d) ? 1 : 0.14;
-      })
+      .selectAll("rect.node-card")
       .attr("stroke", (d) => {
         if (isRoute && routeIds.has(d.id)) return "#e11d48";
         if (selectedNodes.has(d)) return "#0f9d8a";
         return defaultNodeStroke(d);
       })
       .attr("stroke-width", (d) => {
-        if (isRoute && routeIds.has(d.id)) return 3.75;
-        if (selectedNodes.has(d)) return 3.25;
+        if (isRoute && routeIds.has(d.id)) return 3.25;
+        if (selectedNodes.has(d)) return 2.75;
         return defaultNodeStrokeWidth(d);
       });
-    node.selectAll("text.node-label-text").attr("opacity", (d) => {
-      if (isRoute) return routeIds.has(d.id) ? 1 : 0.2;
-      return connectedNodes.has(d) ? 1 : 0.2;
-    });
+    redrawEdges();
   }
 
   function resetHighlight(clearSearch = true) {
     selectedNodes.clear();
     selectionAnchor = null;
+    routeLinkDir = new Map();
     clearRouteStrip();
+    node.attr("opacity", 1);
     node
-      .selectAll("circle")
-      .attr("opacity", 1)
-      .attr("fill", nodeColor)
+      .selectAll("rect.node-card")
       .attr("stroke", defaultNodeStroke)
       .attr("stroke-width", defaultNodeStrokeWidth);
-    node.selectAll("text.node-label-text").attr("opacity", 1);
+    node.selectAll(".node-dot").attr("fill", nodeColor);
     link
       .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
       .attr("opacity", 1)
-      .attr("stroke-width", 1.35);
+      .attr("stroke-width", 1.35)
+      .attr("marker-end", "url(#arrow)");
     linkLabels.style("visibility", "hidden");
+    redrawEdges();
     clearDrawer();
     closePanels();
 
@@ -1135,7 +1259,7 @@ async function drawMap(options = {}) {
     if (q && !selectedNodes.size) {
       const matches = visibleNodes.filter((d) => d.name.toLowerCase().includes(q));
       node
-        .selectAll("circle")
+        .selectAll("rect.node-card")
         .attr("stroke", (d) => (matches.includes(d) ? "#c94444" : defaultNodeStroke(d)))
         .attr("stroke-width", (d) => (matches.includes(d) ? 3 : defaultNodeStrokeWidth(d)));
       if (matches.length === 1 && refit) {
@@ -1145,7 +1269,7 @@ async function drawMap(options = {}) {
       }
     } else if (!selectedNodes.size) {
       node
-        .selectAll("circle")
+        .selectAll("rect.node-card")
         .attr("stroke", defaultNodeStroke)
         .attr("stroke-width", defaultNodeStrokeWidth);
       if (refit && layoutReady && visibleNodes.length) {
@@ -1157,8 +1281,9 @@ async function drawMap(options = {}) {
   }
 
   function updateClusterForce() {
-    simulation.force("x").strength(clusterStrength);
-    simulation.force("y").strength(clusterStrength);
+    columnPull = document.getElementById("flt-cluster").checked ? 0.35 : 0.2;
+    simulation.force("x").strength(columnPull);
+    simulation.force("y").strength(clusterStrength());
     startLiveFraming();
     reheat(0.22);
   }
@@ -1167,10 +1292,12 @@ async function drawMap(options = {}) {
     const xs = subset.map((n) => n.x).filter(Number.isFinite);
     const ys = subset.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
-    const minX = Math.min(...xs) - 70;
-    const maxX = Math.max(...xs) + 70;
-    const minY = Math.min(...ys) - 70;
-    const maxY = Math.max(...ys) + 70;
+    const padX = CARD_W / 2 + 36;
+    const padY = CARD_H / 2 + 36;
+    const minX = Math.min(...xs) - padX;
+    const maxX = Math.max(...xs) + padX;
+    const minY = Math.min(...ys) - padY;
+    const maxY = Math.max(...ys) + padY;
     const bw = Math.max(maxX - minX, 100);
     const bh = Math.max(maxY - minY, 100);
     const scale = Math.min((width - 80) / bw, (height - 80) / bh, 2.2) * 0.88;
@@ -1269,8 +1396,7 @@ async function drawMap(options = {}) {
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
     hitbox.attr("width", width).attr("height", height);
-    simulation.force("centerX", d3.forceX(width / 2).strength(0.018));
-    simulation.force("centerY", d3.forceY(height / 2).strength(0.018));
+    simulation.force("centerY", d3.forceY(height / 2).strength(0.01));
     const rSpread = Math.min(width, height) * 0.42;
     const projKeys = Object.keys(projectCenters).filter((k) => k !== "_none" && k !== "external");
     Object.keys(projectCenters).forEach((key) => {
@@ -1342,6 +1468,9 @@ async function drawMap(options = {}) {
   });
   on(document.getElementById("btn-clear-selection"), "click", () => resetHighlight(true));
   on(document.getElementById("route-strip-close"), "click", () => resetHighlight(true));
+  on(document.getElementById("route-strip-fit"), "click", () => {
+    if (routePath && routePath.length > 1) fitToNodes(routePath, true);
+  });
 
   const filtToggle = document.getElementById("btn-toggle-filters");
   on(filtToggle, "click", () => {
@@ -1411,9 +1540,13 @@ async function drawMap(options = {}) {
       n.name = u.name || n.name;
     });
     // Только данные/цвет — без refit и без сброса камеры
-    node.selectAll("circle").attr("fill", nodeColor);
+    node.selectAll(".node-dot").attr("fill", nodeColor);
     node.select("title").text((d) => d.name);
-    node.select("text.node-label-text").text((d) => innerLabel(d)).style("fill", (d) => labelColor(d));
+    node.select(".node-kind").text(nodeKindText);
+    node
+      .select(".node-name")
+      .text((d) => truncate(displayName(d), 16))
+      .attr("fill", nodeNameFill);
 
     const cov = data.coverage || {};
     const covSummary = document.getElementById("coverage-summary");
