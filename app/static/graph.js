@@ -1,5 +1,4 @@
 const POLL_MS = 20000;
-const STORAGE_KEY = "cmap-node-positions-v6";
 let mapController = null;
 
 /** Только структура графа — без state, иначе poll каждые 20с ломает раскладку. */
@@ -13,23 +12,6 @@ function structureKey(data) {
     .sort()
     .join("|");
   return `${nodePart}#${linkPart}`;
-}
-
-function loadSavedPositions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY) || "{}";
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
-function savePositions(nodes) {
-  const out = {};
-  nodes.forEach((n) => {
-    if (Number.isFinite(n.x) && Number.isFinite(n.y)) out[n.id] = { x: n.x, y: n.y };
-  });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
 }
 
 function formatUpdated(ts) {
@@ -141,24 +123,6 @@ async function drawMap(options = {}) {
         }
     });
 
-  // Узлы только с external-связями — держим у шлюза, не внутри чужой звезды.
-  const nbrIds = new Map();
-  links.forEach((l) => {
-    if (!nbrIds.has(l.source)) nbrIds.set(l.source, []);
-    if (!nbrIds.has(l.target)) nbrIds.set(l.target, []);
-    nbrIds.get(l.source).push(l.target);
-    nbrIds.get(l.target).push(l.source);
-  });
-  const externalLeafIds = new Set();
-  nodes.forEach((n) => {
-    if (n.state === "external") return;
-    const ids = nbrIds.get(n.id) || [];
-    if (!ids.length) return;
-    if (ids.every((id) => String(id).startsWith("external:"))) {
-      externalLeafIds.add(n.id);
-    }
-  });
-
   const datalist = document.getElementById("node-names");
   nodes.forEach((n) => {
     const opt = document.createElement("option");
@@ -205,12 +169,7 @@ async function drawMap(options = {}) {
   let height = Math.max(canvas.clientHeight || 800, 320);
   const selectedNodes = new Set();
   let zoomBehavior;
-  let fittedOnce = false;
-  /** Пока true — камера тихо следует за раскладкой, без «появились → потом зум». */
-  let framingLive = true;
-  let frameTick = 0;
   let layoutReady = false;
-  let destroyed = false;
   // Снимок фильтров до временного раскрытия при фокусе на узле
   let filterSnapshot = null;
 
@@ -382,24 +341,9 @@ async function drawMap(options = {}) {
   const projectNames = [
     ...new Set(nodes.map((n) => n.project).filter(Boolean)),
   ].sort();
-  const projectCenters = {};
-  const spread = Math.min(width, height) * 0.42;
-  projectNames.forEach((p, i) => {
-    const angle = (i / Math.max(projectNames.length, 1)) * Math.PI * 2;
-    projectCenters[p] = {
-      x: width / 2 + Math.cos(angle) * spread,
-      y: height / 2 + Math.sin(angle) * spread * 0.88,
-    };
-  });
-  projectCenters._none = { x: width / 2, y: height / 2 };
-  projectCenters.external = {
-    x: width / 2,
-    y: height * 0.1,
-  };
 
   const CARD_W = 168;
   const CARD_H = 46;
-  const COL_GAP = 240;
 
   // Глубина directed connect_to: корни слева, циклы не углубляют.
   const depthById = new Map();
@@ -515,10 +459,6 @@ async function drawMap(options = {}) {
     const colW = width < 720 ? 186 : 214;
     const x0 = 28 + CARD_W / 2;
     const usable = Math.max(width - 56, CARD_W + 24);
-    nodes.forEach((n) => {
-      n.fx = null;
-      n.fy = null;
-    });
     if (!clustered) {
       const columns = new Map();
       nodes.forEach((n) => {
@@ -605,80 +545,15 @@ async function drawMap(options = {}) {
     })
     .on("zoom", (event) => {
       g.attr("transform", event.transform);
-      // Ручной pan/zoom — не перетягивать кадр автофитом
-      if (event.sourceEvent && framingLive) framingLive = false;
     });
   svg.call(zoomBehavior);
 
-  function forceCardCollide(strength = 0.9) {
-    let nodesArr = [];
-    const padX = CARD_W + 36;
-    const padY = CARD_H + 20;
-    function force(alpha) {
-      const k = strength * alpha;
-      for (let i = 0; i < nodesArr.length; i++) {
-        const a = nodesArr[i];
-        for (let j = i + 1; j < nodesArr.length; j++) {
-          const b = nodesArr[j];
-          if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const adx = Math.abs(dx);
-          const ady = Math.abs(dy);
-          if (adx >= padX || ady >= padY) continue;
-          const ox = padX - adx;
-          const oy = padY - ady;
-          if (ox < oy) {
-            if (a.fx != null && b.fx != null) continue;
-            const sx = dx < 0 ? -1 : 1;
-            const push = ox * k;
-            if (a.fx == null && b.fx == null) {
-              a.vx -= (sx * push) / 2;
-              b.vx += (sx * push) / 2;
-            } else if (a.fx == null) {
-              a.vx -= sx * push;
-            } else {
-              b.vx += sx * push;
-            }
-          } else {
-            if (a.fy != null && b.fy != null) continue;
-            const sy = dy < 0 ? -1 : 1;
-            const push = oy * k;
-            if (a.fy == null && b.fy == null) {
-              a.vy -= (sy * push) / 2;
-              b.vy += (sy * push) / 2;
-            } else if (a.fy == null) {
-              a.vy -= sy * push;
-            } else {
-              b.vy += sy * push;
-            }
-          }
-        }
-      }
-    }
-    force.initialize = (arr) => {
-      nodesArr = arr;
-    };
-    return force;
-  }
-
-  // Связи нужны, чтобы d3 подставил объекты узлов, но сила 0 — ряды не стягиваются.
-  const simulation = d3
-    .forceSimulation(nodes)
-    .force(
-      "link",
-      d3
-        .forceLink(links)
-        .id((d) => d.id)
-        .distance(COL_GAP)
-        .strength(0)
-    )
-    .force("collide", forceCardCollide(0.45))
-    .velocityDecay(0.6)
-    .alphaDecay(0.08)
-    .alpha(0)
-    .stop();
-  framingLive = false;
+  // id связи → объект узла, чтобы дальше везде были source.x / target.y
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  links.forEach((l) => {
+    if (typeof l.source !== "object") l.source = nodeById.get(l.source) || l.source;
+    if (typeof l.target !== "object") l.target = nodeById.get(l.target) || l.target;
+  });
 
   const link = g
     .append("g")
@@ -831,7 +706,7 @@ async function drawMap(options = {}) {
         .join("g")
         .attr("class", "node")
     .style("cursor", "pointer")
-        .call(drag(simulation))
+        .call(drag())
         .on("click", (event, d) => {
       event.stopPropagation();
       if (selectedNodes.has(d)) {
@@ -955,41 +830,11 @@ async function drawMap(options = {}) {
     });
   }
 
-  simulation.on("tick", () => {
-    if (destroyed) return;
-    redrawEdges();
-    node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-  });
-
   function paintPositions() {
     redrawEdges();
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
   }
   paintPositions();
-
-  function unpinLayout() {
-    nodes.forEach((n) => {
-      n.fx = null;
-      n.fy = null;
-    });
-  }
-
-  function reheat(alpha = 0.2) {
-    unpinLayout();
-    simulation.alpha(Math.min(alpha, 0.2)).restart();
-  }
-
-  function startLiveFraming() {
-    framingLive = true;
-    fittedOnce = false;
-    frameTick = 0;
-  }
-
-  simulation.on("end", () => {
-    if (destroyed) return;
-    persistPositions();
-    layoutReady = true;
-  });
 
   function serviceKey(d) {
     return String(d.compose_service || d.name || d.project || d.id || "node");
@@ -1032,10 +877,6 @@ async function drawMap(options = {}) {
     return d.state === "external" ? 2 : 1.25;
   }
 
-  function nodeRadius(d) {
-    return d.state === "external" ? 28 : 34;
-  }
-
   function displayName(d) {
     const raw = String(d.name || "");
     const proj = (d.project || "").toLowerCase();
@@ -1053,26 +894,8 @@ async function drawMap(options = {}) {
     return truncate(displayName(d), 10);
   }
 
-  /** 1–2 строки для подписи внутри круга */
-  function labelLines(d) {
-    const name = displayName(d);
-    if (name.length <= 8) return [name];
-    const parts = name.split(/[-_./]/).filter(Boolean);
-    if (parts.length >= 2) {
-      const a = truncate(parts[0], 8);
-      const b = truncate(parts.slice(1).join("-"), 8);
-      return b ? [a, b] : [truncate(name, 10)];
-    }
-    const mid = Math.ceil(name.length / 2);
-    return [truncate(name.slice(0, mid), 8), truncate(name.slice(mid), 8)];
-  }
-
   function truncate(s, n) {
     return s.length > n ? s.slice(0, n - 1) + "…" : s;
-  }
-
-  function persistPositions() {
-    savePositions(nodes);
   }
 
   function fitToScreen(animate = true) {
@@ -1186,21 +1009,26 @@ async function drawMap(options = {}) {
       .replaceAll(">", "&gt;");
   }
 
+  function paintIdle() {
+    routeLinkDir = new Map();
+    node.attr("opacity", 1);
+    node
+      .selectAll("rect.node-card")
+      .attr("stroke", defaultNodeStroke)
+      .attr("stroke-width", defaultNodeStrokeWidth);
+    node.selectAll(".node-dot").attr("fill", nodeColor);
+    link
+      .attr("stroke", linkStroke)
+      .attr("opacity", linkOpacity)
+      .attr("stroke-width", 1.35)
+      .attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
+    linkLabels.style("visibility", "hidden");
+    redrawEdges();
+  }
+
   function highlightConnections() {
     if (!selectedNodes.size) {
-      routeLinkDir = new Map();
-      node.attr("opacity", 1);
-      node
-        .selectAll("rect.node-card")
-        .attr("stroke", defaultNodeStroke)
-        .attr("stroke-width", defaultNodeStrokeWidth);
-      link
-        .attr("stroke", linkStroke)
-        .attr("opacity", linkOpacity)
-        .attr("stroke-width", 1.35)
-        .attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
-      linkLabels.style("visibility", "hidden");
-      redrawEdges();
+      paintIdle();
       return;
     }
 
@@ -1300,21 +1128,8 @@ async function drawMap(options = {}) {
   function resetHighlight(clearSearch = true) {
     selectedNodes.clear();
     selectionAnchor = null;
-    routeLinkDir = new Map();
     clearRouteStrip();
-    node.attr("opacity", 1);
-    node
-      .selectAll("rect.node-card")
-      .attr("stroke", defaultNodeStroke)
-      .attr("stroke-width", defaultNodeStrokeWidth);
-    node.selectAll(".node-dot").attr("fill", nodeColor);
-    link
-      .attr("stroke", linkStroke)
-      .attr("opacity", linkOpacity)
-      .attr("stroke-width", 1.35)
-      .attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
-    linkLabels.style("visibility", "hidden");
-    redrawEdges();
+    paintIdle();
     clearDrawer();
     closePanels();
 
@@ -1412,7 +1227,6 @@ async function drawMap(options = {}) {
   function updateClusterForce() {
     placeGraph(document.getElementById("flt-cluster").checked);
     paintPositions();
-    persistPositions();
     frameReadable(true);
   }
 
@@ -1442,8 +1256,6 @@ async function drawMap(options = {}) {
       ty = 16 - scale * minY;
     }
     const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
-    framingLive = false;
-    fittedOnce = true;
     svg.interrupt();
     const sel = animate ? svg.transition().duration(420).ease(d3.easeCubicInOut) : svg;
     sel.call(zoomBehavior.transform, t);
@@ -1465,7 +1277,6 @@ async function drawMap(options = {}) {
     const tx = width / 2 - (scale * (minX + maxX)) / 2;
     const ty = height / 2 - (scale * (minY + maxY)) / 2;
     const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
-    if (animate) framingLive = false;
     svg.interrupt();
     const sel = animate ? svg.transition().duration(420).ease(d3.easeCubicInOut) : svg;
     sel.call(zoomBehavior.transform, t);
@@ -1479,25 +1290,13 @@ async function drawMap(options = {}) {
     };
   }
 
-  function drag(sim) {
+  function drag() {
     return d3
       .drag()
-      .on("start", (event) => {
-        if (!event.active) sim.alphaTarget(0.06).restart();
-            event.subject.fx = event.subject.x;
-            event.subject.fy = event.subject.y;
-      })
       .on("drag", (event) => {
-            event.subject.fx = event.x;
-            event.subject.fy = event.y;
-      })
-      .on("end", (event) => {
-            event.subject.fx = null;
-            event.subject.fy = null;
-        if (!event.active) sim.alphaTarget(0);
-        // Мягкий «выдох» после отпускания — без рывка
-        sim.alpha(Math.max(sim.alpha(), 0.08)).restart();
-        persistPositions();
+        event.subject.x = event.x;
+        event.subject.y = event.y;
+        paintPositions();
       });
   }
 
@@ -1569,7 +1368,6 @@ async function drawMap(options = {}) {
   }
 
   function zoomBy(factor) {
-    framingLive = false;
     svg.interrupt();
     svg.transition().duration(280).ease(d3.easeCubicInOut).call(zoomBehavior.scaleBy, factor);
   }
@@ -1601,15 +1399,12 @@ async function drawMap(options = {}) {
   on(document.getElementById("btn-zoom-out"), "click", () => zoomBy(0.84));
   on(document.getElementById("btn-zoom-out-float"), "click", () => zoomBy(0.84));
   on(document.getElementById("btn-reset"), "click", () => {
-    localStorage.removeItem(STORAGE_KEY);
     placeGraph(document.getElementById("flt-cluster").checked);
     paintPositions();
-    persistPositions();
     resetHighlight(true);
     frameReadable(true);
   });
   on(document.getElementById("btn-refresh"), "click", () => {
-    persistPositions();
     softPoll({ forceFresh: true, allowRebuild: true });
   });
   on(document.getElementById("btn-clear-selection"), "click", () => resetHighlight(true));
@@ -1715,12 +1510,8 @@ async function drawMap(options = {}) {
 
   mapController = {
     structureKey: topo,
-    persist: persistPositions,
     applyLiveUpdate,
     destroy() {
-      destroyed = true;
-      persistPositions();
-      simulation.stop();
       listeners.forEach(([el, ev, fn]) => el.removeEventListener(ev, fn));
     },
   };
@@ -1728,7 +1519,6 @@ async function drawMap(options = {}) {
 
 async function softPoll({ forceFresh = false, allowRebuild = false } = {}) {
   try {
-    if (mapController?.persist) mapController.persist();
     const data = await fetchMapData(forceFresh);
     const updatedEl = document.getElementById("map-updated");
     if (updatedEl) updatedEl.textContent = formatUpdated(data.fetched_at);
