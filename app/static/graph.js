@@ -768,11 +768,12 @@ async function drawMap(options = {}) {
     const maxY = Math.max(y1, y2);
     return nodes.some((o) => {
       if (ignore.includes(o)) return false;
-      const l = o.x - CARD_W / 2 + 4;
-      const r = o.x + CARD_W / 2 - 4;
-      const t = o.y - CARD_H / 2 + 4;
-      const b = o.y + CARD_H / 2 - 4;
-      return r > minX && l < maxX && b > minY && t < maxY;
+      const pad = 14;
+      const l = o.x - CARD_W / 2 - pad;
+      const r = o.x + CARD_W / 2 + pad;
+      const t = o.y - CARD_H / 2 - pad;
+      const b = o.y + CARD_H / 2 + pad;
+      return r >= minX && l <= maxX && b >= minY && t <= maxY;
     });
   }
   function clearChannel(n, yEnd) {
