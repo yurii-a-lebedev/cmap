@@ -1,5 +1,5 @@
 const POLL_MS = 20000;
-const STORAGE_KEY = "cmap-node-positions-v5";
+const STORAGE_KEY = "cmap-node-positions-v6";
 let mapController = null;
 
 /** Только структура графа — без state, иначе poll каждые 20с ломает раскладку. */
@@ -17,11 +17,7 @@ function structureKey(data) {
 
 function loadSavedPositions() {
   try {
-    const raw =
-      localStorage.getItem(STORAGE_KEY) ||
-      localStorage.getItem("cmap-node-positions-v4") ||
-      localStorage.getItem("cmap-node-positions-v3") ||
-      "{}";
+    const raw = localStorage.getItem(STORAGE_KEY) || "{}";
     return JSON.parse(raw);
   } catch {
     return {};
@@ -451,34 +447,100 @@ async function drawMap(options = {}) {
     deepenFrom([n.id]);
   });
 
-  function columnX(id) {
-    return 120 + (depthById.get(id) || 0) * COL_GAP;
+  const degreeById = new Map(nodes.map((n) => [n.id, 0]));
+  links.forEach((l) => {
+    const s = l.source != null && typeof l.source === "object" ? l.source.id : l.source;
+    const t = l.target != null && typeof l.target === "object" ? l.target.id : l.target;
+    degreeById.set(s, (degreeById.get(s) || 0) + 1);
+    degreeById.set(t, (degreeById.get(t) || 0) + 1);
+  });
+
+  function endId(v) {
+    return v != null && typeof v === "object" ? v.id : v;
+  }
+  function isHubLink(l) {
+    return (degreeById.get(endId(l.source)) || 0) >= 8 || (degreeById.get(endId(l.target)) || 0) >= 8;
+  }
+  function linkStroke(d) {
+    if (isHubLink(d)) return "#c5ced8";
+    return portColors[parseInt(d.target_port, 10)] || "#9aa6b5";
+  }
+  function linkOpacity(d) {
+    return isHubLink(d) ? 0.22 : 0.8;
+  }
+
+  /** Проект — отдельный ряд, внутри ряда слева направо по глубине. Без пружин, которые схлопывают карточки. */
+  function placeGraph(clustered) {
+    const row = CARD_H + 18;
+    const gap = 26;
+    const x0 = 160;
+    nodes.forEach((n) => {
+      n.fx = null;
+      n.fy = null;
+    });
+    if (!clustered) {
+      const columns = new Map();
+      nodes.forEach((n) => {
+        const d = depthById.get(n.id) || 0;
+        if (!columns.has(d)) columns.set(d, []);
+        columns.get(d).push(n);
+      });
+      columns.forEach((group, depth) => {
+        group.sort(
+          (a, b) =>
+            String(a.project || "").localeCompare(String(b.project || "")) ||
+            String(a.name).localeCompare(String(b.name))
+        );
+        group.forEach((n, i) => {
+          n.x = x0 + depth * COL_GAP;
+          n.y = 64 + i * row;
+        });
+      });
+      return;
+    }
+    const byProject = new Map();
+    nodes.forEach((n) => {
+      const key = n.state === "external" ? "external" : n.project || n.name || "";
+      if (!byProject.has(key)) byProject.set(key, []);
+      byProject.get(key).push(n);
+    });
+    let y = 64;
+    [...byProject.keys()].sort((a, b) => a.localeCompare(b)).forEach((key) => {
+      const group = byProject.get(key);
+      const columns = new Map();
+      group.forEach((n) => {
+        const d = depthById.get(n.id) || 0;
+        if (!columns.has(d)) columns.set(d, []);
+        columns.get(d).push(n);
+      });
+      let rows = 1;
+      columns.forEach((arr) => {
+        arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        rows = Math.max(rows, arr.length);
+      });
+      columns.forEach((arr, depth) => {
+        arr.forEach((n, i) => {
+          n.x = x0 + depth * COL_GAP;
+          n.y = y + i * row;
+        });
+      });
+      y += rows * row + gap;
+    });
   }
 
   let restoredCount = 0;
-  const unplaced = [];
   nodes.forEach((n) => {
-    if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y) && !externalLeafIds.has(n.id)) {
-      n.x = saved[n.id].x;
-      n.y = saved[n.id].y;
+    const p = saved[n.id];
+    if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+      n.x = p.x;
+      n.y = p.y;
       restoredCount += 1;
-    } else {
-      unplaced.push(n);
     }
   });
-  const byDepth = new Map();
-  unplaced.forEach((n) => {
-    const depth = depthById.get(n.id) || 0;
-    if (!byDepth.has(depth)) byDepth.set(depth, []);
-    byDepth.get(depth).push(n);
-  });
-  byDepth.forEach((group) => {
-    group.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-    group.forEach((n, index) => {
-      n.x = columnX(n.id);
-      n.y = 80 + index * (CARD_H + 22);
-    });
-  });
+  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
+  if (!layoutMostlyRestored) {
+    placeGraph(document.getElementById("flt-cluster").checked);
+  }
 
   const svg = d3.select(svgEl).attr("viewBox", `0 0 ${width} ${height}`);
   const g = svg.append("g");
@@ -506,10 +568,6 @@ async function drawMap(options = {}) {
       if (event.sourceEvent && framingLive) framingLive = false;
     });
   svg.call(zoomBehavior);
-
-  function clusterStrength() {
-    return document.getElementById("flt-cluster").checked ? 0.12 : 0.015;
-  }
 
   function forceCardCollide(strength = 0.9) {
     let nodesArr = [];
@@ -563,8 +621,7 @@ async function drawMap(options = {}) {
     return force;
   }
 
-  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
-  let columnPull = layoutMostlyRestored ? 0.02 : 0.35;
+  // Связи нужны, чтобы d3 подставил объекты узлов, но сила 0 — ряды не стягиваются.
   const simulation = d3
     .forceSimulation(nodes)
     .force(
@@ -572,32 +629,15 @@ async function drawMap(options = {}) {
       d3
         .forceLink(links)
         .id((d) => d.id)
-        .distance((l) => (l.resolved === "external" ? 280 : COL_GAP))
-        .strength(0.18)
+        .distance(COL_GAP)
+        .strength(0)
     )
-    .force("charge", d3.forceManyBody().strength(-280).distanceMin(20).distanceMax(520))
-    .force("collide", forceCardCollide(0.9))
-    .force("centerY", d3.forceY(height / 2).strength(0.01))
-    .force("x", d3.forceX((d) => columnX(d.id)).strength(columnPull))
-    .force(
-      "y",
-      d3
-        .forceY((d) => {
-          const key = d.state === "external" ? "external" : d.project || "_none";
-          return (projectCenters[key] || projectCenters._none).y;
-        })
-        .strength(layoutMostlyRestored ? 0.01 : 0.04)
-    )
-    .velocityDecay(0.55)
-    .alphaDecay(0.012)
-    .alphaMin(0.0008);
-
-  // Если раскладка уже сохранена — не взрывать граф и не гонять камеру за тиками
-  if (layoutMostlyRestored) {
-    simulation.alpha(0.04);
-    framingLive = false;
-    fittedOnce = true;
-  }
+    .force("collide", forceCardCollide(0.45))
+    .velocityDecay(0.6)
+    .alphaDecay(0.08)
+    .alpha(0)
+    .stop();
+  framingLive = false;
 
   const link = g
     .append("g")
@@ -606,9 +646,9 @@ async function drawMap(options = {}) {
         .join("path")
     .attr("class", "link-line")
     .attr("fill", "none")
-    .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#9aa6b5")
+    .attr("stroke", linkStroke)
     .attr("stroke-width", 1.35)
-    .attr("stroke-opacity", 0.45);
+    .attr("stroke-opacity", linkOpacity);
 
   const linkLabels = g
     .append("g")
@@ -653,7 +693,7 @@ async function drawMap(options = {}) {
   }
   addArrowMarker("arrow", "#9aa6b5", 9);
   addArrowMarker("arrow-route", "#e11d48", 9);
-  link.attr("marker-end", "url(#arrow)");
+  link.attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
   /** Направление ребра маршрута: link → {from, to} */
   let routeLinkDir = new Map();
 
@@ -819,8 +859,13 @@ async function drawMap(options = {}) {
     if (destroyed) return;
     redrawEdges();
     node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    if (framingLive && ++frameTick % 2 === 0) fitToScreen(false);
   });
+
+  function paintPositions() {
+    redrawEdges();
+    node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+  }
+  paintPositions();
 
   function unpinLayout() {
     nodes.forEach((n) => {
@@ -831,13 +876,7 @@ async function drawMap(options = {}) {
 
   function reheat(alpha = 0.2) {
     unpinLayout();
-    const next = Math.min(alpha, 0.35);
-    // Reset зовёт reheat(0.3). На уже восстановленной карте X был 0.02 — включаем колонки.
-    if (next >= 0.3 && columnPull <= 0.02) {
-      columnPull = 0.35;
-      simulation.force("x").strength(columnPull);
-    }
-    simulation.alpha(next).restart();
+    simulation.alpha(Math.min(alpha, 0.2)).restart();
   }
 
   function startLiveFraming() {
@@ -848,19 +887,9 @@ async function drawMap(options = {}) {
 
   simulation.on("end", () => {
     if (destroyed) return;
-    // Не фиксируем fx/fy — иначе граф «замирает» и не расправляется
     persistPositions();
     layoutReady = true;
-    if (!fittedOnce || framingLive) {
-      fittedOnce = true;
-      framingLive = false;
-      fitToScreen(false);
-      focusFromQuery(preserveNode);
-    }
   });
-
-  // Сразу поставить кадр по известным координатам — без вспышки 1:1 и последующего зума
-  if (restoredCount > 0) fitToScreen(false);
 
   function serviceKey(d) {
     return String(d.compose_service || d.name || d.project || d.id || "node");
@@ -1066,10 +1095,10 @@ async function drawMap(options = {}) {
         .attr("stroke", defaultNodeStroke)
         .attr("stroke-width", defaultNodeStrokeWidth);
       link
-        .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
-        .attr("opacity", 1)
+        .attr("stroke", linkStroke)
+        .attr("opacity", linkOpacity)
         .attr("stroke-width", 1.35)
-        .attr("marker-end", "url(#arrow)");
+        .attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
       linkLabels.style("visibility", "hidden");
       redrawEdges();
       return;
@@ -1180,10 +1209,10 @@ async function drawMap(options = {}) {
       .attr("stroke-width", defaultNodeStrokeWidth);
     node.selectAll(".node-dot").attr("fill", nodeColor);
     link
-      .attr("stroke", (d) => portColors[parseInt(d.target_port, 10)] || "#666")
-      .attr("opacity", 1)
+      .attr("stroke", linkStroke)
+      .attr("opacity", linkOpacity)
       .attr("stroke-width", 1.35)
-      .attr("marker-end", "url(#arrow)");
+      .attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
     linkLabels.style("visibility", "hidden");
     redrawEdges();
     clearDrawer();
@@ -1281,11 +1310,29 @@ async function drawMap(options = {}) {
   }
 
   function updateClusterForce() {
-    columnPull = document.getElementById("flt-cluster").checked ? 0.35 : 0.2;
-    simulation.force("x").strength(columnPull);
-    simulation.force("y").strength(clusterStrength());
-    startLiveFraming();
-    reheat(0.22);
+    placeGraph(document.getElementById("flt-cluster").checked);
+    paintPositions();
+    persistPositions();
+    frameReadable(true);
+  }
+
+  function frameReadable(animate = false) {
+    const xs = nodes.map((n) => n.x).filter(Number.isFinite);
+    const ys = nodes.map((n) => n.y).filter(Number.isFinite);
+    if (!xs.length) return;
+    const padX = CARD_W / 2 + 48;
+    const padY = CARD_H / 2 + 28;
+    const minX = Math.min(...xs) - padX;
+    const maxX = Math.max(...xs) + padX;
+    const minY = Math.min(...ys) - padY;
+    const bw = Math.max(maxX - minX, 100);
+    const scale = Math.min(1, (width - 36) / bw);
+    const t = d3.zoomIdentity.translate(24 - scale * minX, 20 - scale * minY).scale(scale);
+    framingLive = false;
+    fittedOnce = true;
+    svg.interrupt();
+    const sel = animate ? svg.transition().duration(420).ease(d3.easeCubicInOut) : svg;
+    sel.call(zoomBehavior.transform, t);
   }
 
   function fitToNodes(subset, animate = true) {
@@ -1365,8 +1412,6 @@ async function drawMap(options = {}) {
       el.classList.toggle("active", isAll ? !project : el.textContent === project);
     });
     applyFilters({ refit: true });
-    startLiveFraming();
-    reheat(0.2);
   }
   const allChip = document.createElement("button");
   allChip.type = "button";
@@ -1396,7 +1441,6 @@ async function drawMap(options = {}) {
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
     hitbox.attr("width", width).attr("height", height);
-    simulation.force("centerY", d3.forceY(height / 2).strength(0.01));
     const rSpread = Math.min(width, height) * 0.42;
     const projKeys = Object.keys(projectCenters).filter((k) => k !== "_none" && k !== "external");
     Object.keys(projectCenters).forEach((key) => {
@@ -1458,9 +1502,11 @@ async function drawMap(options = {}) {
   on(document.getElementById("btn-zoom-out-float"), "click", () => zoomBy(0.84));
   on(document.getElementById("btn-reset"), "click", () => {
     localStorage.removeItem(STORAGE_KEY);
-    startLiveFraming();
-    reheat(0.3);
+    placeGraph(document.getElementById("flt-cluster").checked);
+    paintPositions();
+    persistPositions();
     resetHighlight(true);
+    frameReadable(true);
   });
   on(document.getElementById("btn-refresh"), "click", () => {
     persistPositions();
@@ -1521,7 +1567,11 @@ async function drawMap(options = {}) {
   }
 
   syncPanelState();
+  layoutReady = true;
+  paintPositions();
+  frameReadable(false);
   applyFilters();
+  focusFromQuery(preserveNode);
 
   function applyLiveUpdate(data) {
     const byId = new Map((data.nodes || []).map((n) => [n.id, n]));
