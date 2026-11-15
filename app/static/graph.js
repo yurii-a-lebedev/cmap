@@ -453,10 +453,10 @@ async function drawMap(options = {}) {
 
   /** Плитки проектов в несколько колонок, чтобы карта помещалась и не резала чужие связи. */
   function placeGraph(clustered) {
-    const row = CARD_H + 16;
-    const gapY = 32;
-    const gapX = 56;
-    const colW = width < 720 ? 186 : 214;
+    const row = CARD_H + 18;
+    const gapY = 48;
+    const gapX = 64;
+    const colW = width < 720 ? 196 : 232;
     const x0 = 28 + CARD_W / 2;
     const usable = Math.max(width - 56, CARD_W + 24);
     if (!clustered) {
@@ -485,17 +485,72 @@ async function drawMap(options = {}) {
       if (!byProject.has(key)) byProject.set(key, []);
       byProject.get(key).push(n);
     });
+    function rankInProject(group) {
+      const ids = new Set(group.map((n) => n.id));
+      const incoming = new Map(group.map((n) => [n.id, []]));
+      links.forEach((l) => {
+        const s = endId(l.source);
+        const t = endId(l.target);
+        if (ids.has(s) && ids.has(t)) incoming.get(t).push(s);
+      });
+      const memo = new Map();
+      const stack = new Set();
+      function dep(id) {
+        if (memo.has(id)) return memo.get(id);
+        if (stack.has(id)) return 0;
+        stack.add(id);
+        let d = 0;
+        (incoming.get(id) || []).forEach((p) => {
+          d = Math.max(d, dep(p) + 1);
+        });
+        stack.delete(id);
+        memo.set(id, d);
+        return d;
+      }
+      group.forEach((n) => {
+        n.rank = dep(n.id);
+      });
+    }
+    function orderColumns(columns) {
+      const depths = [...columns.keys()].sort((a, b) => a - b);
+      const index = new Map();
+      const bary = (n) => {
+        const vals = [];
+        links.forEach((l) => {
+          const s = endId(l.source);
+          const t = endId(l.target);
+          const other = s === n.id ? t : t === n.id ? s : null;
+          if (other != null && index.has(other)) vals.push(index.get(other));
+        });
+        if (!vals.length) return index.get(n.id) ?? 0;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+      };
+      depths.forEach((d) =>
+        columns.get(d).sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      );
+      for (let pass = 0; pass < 4; pass++) {
+        depths.forEach((d) => columns.get(d).forEach((n, i) => index.set(n.id, i)));
+        depths.forEach((d) => {
+          columns.get(d).sort(
+            (a, b) => bary(a) - bary(b) || String(a.name).localeCompare(String(b.name))
+          );
+          columns.get(d).forEach((n, i) => index.set(n.id, i));
+        });
+      }
+    }
     const tiles = [...byProject.keys()].sort((a, b) => a.localeCompare(b)).map((key) => {
+      const group = byProject.get(key);
+      rankInProject(group);
       const columns = new Map();
-      byProject.get(key).forEach((n) => {
-        const d = nodeDepth(n);
+      group.forEach((n) => {
+        const d = n.rank || 0;
         if (!columns.has(d)) columns.set(d, []);
         columns.get(d).push(n);
       });
+      orderColumns(columns);
       let rows = 1;
       let maxD = 0;
       columns.forEach((arr, d) => {
-        arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
         rows = Math.max(rows, arr.length);
         maxD = Math.max(maxD, d);
       });
@@ -510,10 +565,13 @@ async function drawMap(options = {}) {
         cursorY += rowMax + gapY;
         rowMax = 0;
       }
+      const laneBottom = cursorY + Math.max(tile.rows - 1, 0) * row + CARD_H / 2;
       tile.columns.forEach((arr, depth) => {
+        const offset = ((tile.rows - arr.length) * row) / 2;
         arr.forEach((n, i) => {
           n.x = x0 + cursorX + depth * colW;
-          n.y = cursorY + i * row;
+          n.y = cursorY + offset + i * row;
+          n.laneBottom = laneBottom;
         });
       });
       cursorX += tile.w + gapX;
@@ -644,12 +702,29 @@ async function drawMap(options = {}) {
       c2y: y2,
     };
   }
+  function rankGap(from, to) {
+    if (from.rank == null || to.rank == null) return 1;
+    return Math.abs(from.rank - to.rank);
+  }
+  function laneFloor(from, to) {
+    const bottoms = [from.laneBottom, to.laneBottom].filter(Number.isFinite);
+    if (!bottoms.length) return Math.max(from.y, to.y) + CARD_H;
+    return Math.max(...bottoms) + 18;
+  }
   function edgePath(from, to) {
     const g = edgeCurve(from, to);
-    return `M${g.x1},${g.y1}C${g.c1x},${g.c1y} ${g.c2x},${g.c2y} ${g.x2},${g.y2}`;
+    if (rankGap(from, to) <= 1) {
+      return `M${g.x1},${g.y1}C${g.c1x},${g.c1y} ${g.c2x},${g.c2y} ${g.x2},${g.y2}`;
+    }
+    // Прыжок через колонку идёт под рядом, а не сквозь чужие карточки.
+    const yb = laneFloor(from, to);
+    const out = g.x1 <= g.x2 ? 1 : -1;
+    const mid = (g.x1 + g.x2) / 2;
+    return `M${g.x1},${g.y1}C${g.x1 + out * 36},${g.y1} ${g.x1 + out * 36},${yb} ${mid},${yb}C${g.x2 - out * 36},${yb} ${g.x2 - out * 36},${g.y2} ${g.x2},${g.y2}`;
   }
   function edgeMid(from, to) {
     const g = edgeCurve(from, to);
+    if (rankGap(from, to) > 1) return { x: (g.x1 + g.x2) / 2, y: laneFloor(from, to) };
     const u = 0.5;
     const t = 0.5;
     return {
