@@ -629,38 +629,32 @@ async function drawMap(options = {}) {
     if (a && a === b) return true;
     return Math.abs((from.y || 0) - (to.y || 0)) <= CARD_H + 24;
   }
-  function busY() {
-    let min = Infinity;
-    nodes.forEach((n) => {
-      if (Number.isFinite(n.y)) min = Math.min(min, n.y);
-    });
-    return (Number.isFinite(min) ? min : 0) - CARD_H / 2 - 36;
+  function edgeCurve(from, to) {
+    const { x1, y1, x2, y2 } = edgeEnds(from, to);
+    const out = x1 <= x2 ? 1 : -1;
+    const dx = Math.max(72, Math.abs(x2 - x1) * 0.42);
+    return {
+      x1,
+      y1,
+      x2,
+      y2,
+      c1x: x1 + out * dx,
+      c1y: y1,
+      c2x: x2 - out * dx,
+      c2y: y2,
+    };
   }
   function edgePath(from, to) {
-    const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    const out = x1 <= x2 ? 1 : -1;
-    const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-    if (edgeIsLocal(from, to)) {
-      const c1x = x1 + out * dx;
-      const c2x = x2 - out * dx;
-      return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
-    }
-    // Дальняя связь (к traefik и обратно): из бока карточки, плавная дуга над картой, вход в бок.
-    const yb = busY();
-    const midX = (x1 + x2) / 2;
-    const shoulder = 32;
-    return `M${x1},${y1}C${x1 + out * shoulder},${y1} ${x1 + out * shoulder},${yb} ${midX},${yb}C${x2 - out * shoulder},${yb} ${x2 - out * shoulder},${y2} ${x2},${y2}`;
+    const g = edgeCurve(from, to);
+    return `M${g.x1},${g.y1}C${g.c1x},${g.c1y} ${g.c2x},${g.c2y} ${g.x2},${g.y2}`;
   }
   function edgeMid(from, to) {
-    const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    if (!edgeIsLocal(from, to)) return { x: (x1 + x2) / 2, y: busY() };
-    const out = x1 <= x2 ? 1 : -1;
-    const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-    const c1x = x1 + out * dx;
-    const c2x = x2 - out * dx;
+    const g = edgeCurve(from, to);
+    const u = 0.5;
+    const t = 0.5;
     return {
-      x: 0.125 * x1 + 0.375 * c1x + 0.375 * c2x + 0.125 * x2,
-      y: (y1 + y2) / 2,
+      x: u * u * u * g.x1 + 3 * u * u * t * g.c1x + 3 * u * t * t * g.c2x + t * t * t * g.x2,
+      y: u * u * u * g.y1 + 3 * u * u * t * g.c1y + 3 * u * t * t * g.c2y + t * t * t * g.y2,
     };
   }
 
