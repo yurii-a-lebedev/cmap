@@ -487,28 +487,37 @@ async function drawMap(options = {}) {
     });
     function rankInProject(group) {
       const ids = new Set(group.map((n) => n.id));
-      const incoming = new Map(group.map((n) => [n.id, []]));
+      const outgoing = new Map(group.map((n) => [n.id, []]));
+      const indeg = new Map(group.map((n) => [n.id, 0]));
       links.forEach((l) => {
         const s = endId(l.source);
         const t = endId(l.target);
-        if (ids.has(s) && ids.has(t)) incoming.get(t).push(s);
+        if (!ids.has(s) || !ids.has(t)) return;
+        outgoing.get(s).push(t);
+        indeg.set(t, (indeg.get(t) || 0) + 1);
       });
-      const memo = new Map();
-      const stack = new Set();
-      function dep(id) {
-        if (memo.has(id)) return memo.get(id);
-        if (stack.has(id)) return 0;
-        stack.add(id);
-        let d = 0;
-        (incoming.get(id) || []).forEach((p) => {
-          d = Math.max(d, dep(p) + 1);
+      const rank = new Map();
+      const queue = [];
+      group.forEach((n) => {
+        if ((indeg.get(n.id) || 0) === 0) {
+          rank.set(n.id, 0);
+          queue.push(n.id);
+        }
+      });
+      if (!queue.length && group.length) {
+        rank.set(group[0].id, 0);
+        queue.push(group[0].id);
+      }
+      for (let i = 0; i < queue.length; i++) {
+        const id = queue[i];
+        (outgoing.get(id) || []).forEach((t) => {
+          if (rank.has(t)) return;
+          rank.set(t, rank.get(id) + 1);
+          queue.push(t);
         });
-        stack.delete(id);
-        memo.set(id, d);
-        return d;
       }
       group.forEach((n) => {
-        n.rank = dep(n.id);
+        n.rank = rank.has(n.id) ? rank.get(n.id) : 0;
       });
     }
     function orderColumns(columns) {
@@ -531,9 +540,11 @@ async function drawMap(options = {}) {
       for (let pass = 0; pass < 4; pass++) {
         depths.forEach((d) => columns.get(d).forEach((n, i) => index.set(n.id, i)));
         depths.forEach((d) => {
-          columns.get(d).sort(
-            (a, b) => bary(a) - bary(b) || String(a.name).localeCompare(String(b.name))
-          );
+          if (d !== depths[0]) {
+            columns.get(d).sort(
+              (a, b) => bary(a) - bary(b) || String(a.name).localeCompare(String(b.name))
+            );
+          }
           columns.get(d).forEach((n, i) => index.set(n.id, i));
         });
       }
@@ -673,12 +684,18 @@ async function drawMap(options = {}) {
   let routeLinkDir = new Map();
 
   function edgeEnds(from, to) {
+    const sameCol = Math.abs(from.x - to.x) < 30;
+    if (sameCol) {
+      const x = Math.max(from.x, to.x) + CARD_W / 2;
+      return { x1: x, y1: from.y, x2: x, y2: to.y, sameCol: true };
+    }
     const ltr = from.x <= to.x;
     return {
       x1: from.x + (ltr ? CARD_W / 2 : -CARD_W / 2),
       y1: from.y,
       x2: to.x + (ltr ? -CARD_W / 2 : CARD_W / 2),
       y2: to.y,
+      sameCol: false,
     };
   }
   function edgeIsLocal(from, to) {
@@ -688,9 +705,13 @@ async function drawMap(options = {}) {
     return Math.abs((from.y || 0) - (to.y || 0)) <= CARD_H + 24;
   }
   function edgeCurve(from, to) {
-    const { x1, y1, x2, y2 } = edgeEnds(from, to);
+    const { x1, y1, x2, y2, sameCol } = edgeEnds(from, to);
+    if (sameCol) {
+      const bow = 34;
+      return { x1, y1, x2, y2, c1x: x1 + bow, c1y: y1, c2x: x2 + bow, c2y: y2 };
+    }
     const out = x1 <= x2 ? 1 : -1;
-    const dx = Math.max(72, Math.abs(x2 - x1) * 0.42);
+    const dx = Math.max(48, Math.min(110, Math.abs(x2 - x1) * 0.38));
     return {
       x1,
       y1,
@@ -702,29 +723,12 @@ async function drawMap(options = {}) {
       c2y: y2,
     };
   }
-  function rankGap(from, to) {
-    if (from.rank == null || to.rank == null) return 1;
-    return Math.abs(from.rank - to.rank);
-  }
-  function laneFloor(from, to) {
-    const bottoms = [from.laneBottom, to.laneBottom].filter(Number.isFinite);
-    if (!bottoms.length) return Math.max(from.y, to.y) + CARD_H;
-    return Math.max(...bottoms) + 18;
-  }
   function edgePath(from, to) {
     const g = edgeCurve(from, to);
-    if (rankGap(from, to) <= 1) {
-      return `M${g.x1},${g.y1}C${g.c1x},${g.c1y} ${g.c2x},${g.c2y} ${g.x2},${g.y2}`;
-    }
-    // Прыжок через колонку идёт под рядом, а не сквозь чужие карточки.
-    const yb = laneFloor(from, to);
-    const out = g.x1 <= g.x2 ? 1 : -1;
-    const mid = (g.x1 + g.x2) / 2;
-    return `M${g.x1},${g.y1}C${g.x1 + out * 36},${g.y1} ${g.x1 + out * 36},${yb} ${mid},${yb}C${g.x2 - out * 36},${yb} ${g.x2 - out * 36},${g.y2} ${g.x2},${g.y2}`;
+    return `M${g.x1},${g.y1}C${g.c1x},${g.c1y} ${g.c2x},${g.c2y} ${g.x2},${g.y2}`;
   }
   function edgeMid(from, to) {
     const g = edgeCurve(from, to);
-    if (rankGap(from, to) > 1) return { x: (g.x1 + g.x2) / 2, y: laneFloor(from, to) };
     const u = 0.5;
     const t = 0.5;
     return {
