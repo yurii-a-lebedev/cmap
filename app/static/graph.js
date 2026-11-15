@@ -634,65 +634,30 @@ async function drawMap(options = {}) {
     nodes.forEach((n) => {
       if (Number.isFinite(n.y)) min = Math.min(min, n.y);
     });
-    return (Number.isFinite(min) ? min : 0) - CARD_H / 2 - 28;
-  }
-  function segmentHitsCard(x1, y1, x2, y2, ignore) {
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minY = Math.min(y1, y2);
-    const maxY = Math.max(y1, y2);
-    return nodes.some((o) => {
-      if (ignore.includes(o)) return false;
-      const pad = 14;
-      const l = o.x - CARD_W / 2 - pad;
-      const r = o.x + CARD_W / 2 + pad;
-      const t = o.y - CARD_H / 2 - pad;
-      const b = o.y + CARD_H / 2 + pad;
-      return r >= minX && l <= maxX && b >= minY && t <= maxY;
-    });
-  }
-  function clearChannel(n, yEnd) {
-    const y0 = n.y - CARD_H / 2;
-    for (let dx = 0; dx <= 2400; dx += 16) {
-      const xs = dx === 0 ? [n.x] : [n.x + dx, n.x - dx];
-      for (const x of xs) {
-        if (!segmentHitsCard(x, y0, x, yEnd, [n])) return x;
-      }
-    }
-    return n.x;
-  }
-  function elbowUp(n, yb) {
-    const yTop = n.y - CARD_H / 2;
-    const x = clearChannel(n, yb);
-    if (Math.abs(x - n.x) < 1) return { x, yH: yTop };
-    for (let y = yTop - 2; y >= yb; y -= 8) {
-      const upClear = !segmentHitsCard(n.x, yTop, n.x, y, [n]);
-      const acrossClear = !segmentHitsCard(n.x, y, x, y, [n]);
-      if (upClear && acrossClear) return { x, yH: y };
-    }
-    return { x, yH: yb };
+    return (Number.isFinite(min) ? min : 0) - CARD_H / 2 - 36;
   }
   function edgePath(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
+    const out = x1 <= x2 ? 1 : -1;
+    const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
     if (edgeIsLocal(from, to)) {
-      const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-      const c1x = x1 + (x1 <= x2 ? dx : -dx);
-      const c2x = x2 + (x1 <= x2 ? -dx : dx);
+      const c1x = x1 + out * dx;
+      const c2x = x2 - out * dx;
       return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
     }
+    // Дальняя связь (к traefik и обратно): из бока карточки, плавная дуга над картой, вход в бок.
     const yb = busY();
-    const a = elbowUp(from, yb);
-    const b = elbowUp(to, yb);
-    const yTo = to.y - CARD_H / 2;
-    const yFrom = from.y - CARD_H / 2;
-    return `M${from.x},${yFrom}V${a.yH}H${a.x}V${yb}H${b.x}V${b.yH}H${to.x}V${yTo}`;
+    const midX = (x1 + x2) / 2;
+    const shoulder = 32;
+    return `M${x1},${y1}C${x1 + out * shoulder},${y1} ${x1 + out * shoulder},${yb} ${midX},${yb}C${x2 - out * shoulder},${yb} ${x2 - out * shoulder},${y2} ${x2},${y2}`;
   }
   function edgeMid(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    if (!edgeIsLocal(from, to)) return { x: (from.x + to.x) / 2, y: busY() };
+    if (!edgeIsLocal(from, to)) return { x: (x1 + x2) / 2, y: busY() };
+    const out = x1 <= x2 ? 1 : -1;
     const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
-    const c1x = x1 + (x1 <= x2 ? dx : -dx);
-    const c2x = x2 + (x1 <= x2 ? -dx : dx);
+    const c1x = x1 + out * dx;
+    const c2x = x2 - out * dx;
     return {
       x: 0.125 * x1 + 0.375 * c1x + 0.375 * c2x + 0.125 * x2,
       y: (y1 + y2) / 2,
