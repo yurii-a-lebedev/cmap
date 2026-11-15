@@ -795,6 +795,22 @@ a.row-map-link:hover {
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+@media (max-width: 720px) {
+  .map-app .topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .map-app .topbar-end {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .map-float-tools {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
 @media (max-width: 960px) {
   .page { width: calc(100% - 24px); margin: 20px auto 40px; }
   .page-head { margin-bottom: 18px; gap: 12px; }

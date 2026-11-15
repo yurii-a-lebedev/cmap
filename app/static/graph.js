@@ -378,7 +378,6 @@ async function drawMap(options = {}) {
   }
 
   let activeProject = "";
-  const saved = loadSavedPositions();
 
   const projectNames = [
     ...new Set(nodes.map((n) => n.project).filter(Boolean)),
@@ -466,14 +465,56 @@ async function drawMap(options = {}) {
     return portColors[parseInt(d.target_port, 10)] || "#9aa6b5";
   }
   function linkOpacity(d) {
-    return isHubLink(d) ? 0.22 : 0.8;
+    const from = d.source;
+    const to = d.target;
+    if (!from || !to || !Number.isFinite(from.y) || !Number.isFinite(to.y)) return 0.85;
+    return edgeIsLocal(from, to) ? 0.9 : 0;
   }
 
-  /** Проект — отдельный ряд, внутри ряда слева направо по глубине. Без пружин, которые схлопывают карточки. */
+  function anchorNode(n) {
+    let best = null;
+    let bestDeg = -1;
+    links.forEach((l) => {
+      const s = endId(l.source);
+      const t = endId(l.target);
+      const otherId = s === n.id ? t : t === n.id ? s : null;
+      if (!otherId) return;
+      const other = nodes.find((x) => x.id === otherId);
+      if (!other) return;
+      const deg = degreeById.get(other.id) || 0;
+      if (deg > bestDeg) {
+        bestDeg = deg;
+        best = other;
+      }
+    });
+    return best;
+  }
+
+  function projectKey(n) {
+    if (n.state === "external") {
+      const a = anchorNode(n);
+      if (a && a.state !== "external") return a.project || a.name || "external";
+      return "external";
+    }
+    return n.project || n.name || "";
+  }
+
+  function nodeDepth(n) {
+    if (n.state === "external") {
+      const a = anchorNode(n);
+      if (a) return (depthById.get(a.id) || 0) + 1;
+    }
+    return depthById.get(n.id) || 0;
+  }
+
+  /** Плитки проектов в несколько колонок, чтобы карта помещалась и не резала чужие связи. */
   function placeGraph(clustered) {
-    const row = CARD_H + 18;
-    const gap = 26;
-    const x0 = 160;
+    const row = CARD_H + 16;
+    const gapY = 32;
+    const gapX = 56;
+    const colW = width < 720 ? 186 : 214;
+    const x0 = 28 + CARD_W / 2;
+    const usable = Math.max(width - 56, CARD_W + 24);
     nodes.forEach((n) => {
       n.fx = null;
       n.fy = null;
@@ -481,66 +522,66 @@ async function drawMap(options = {}) {
     if (!clustered) {
       const columns = new Map();
       nodes.forEach((n) => {
-        const d = depthById.get(n.id) || 0;
+        const d = nodeDepth(n);
         if (!columns.has(d)) columns.set(d, []);
         columns.get(d).push(n);
       });
       columns.forEach((group, depth) => {
         group.sort(
           (a, b) =>
-            String(a.project || "").localeCompare(String(b.project || "")) ||
+            String(projectKey(a)).localeCompare(String(projectKey(b))) ||
             String(a.name).localeCompare(String(b.name))
         );
         group.forEach((n, i) => {
-          n.x = x0 + depth * COL_GAP;
-          n.y = 64 + i * row;
+          n.x = x0 + depth * colW;
+          n.y = 48 + i * row;
         });
       });
       return;
     }
     const byProject = new Map();
     nodes.forEach((n) => {
-      const key = n.state === "external" ? "external" : n.project || n.name || "";
+      const key = projectKey(n);
       if (!byProject.has(key)) byProject.set(key, []);
       byProject.get(key).push(n);
     });
-    let y = 64;
-    [...byProject.keys()].sort((a, b) => a.localeCompare(b)).forEach((key) => {
-      const group = byProject.get(key);
+    const tiles = [...byProject.keys()].sort((a, b) => a.localeCompare(b)).map((key) => {
       const columns = new Map();
-      group.forEach((n) => {
-        const d = depthById.get(n.id) || 0;
+      byProject.get(key).forEach((n) => {
+        const d = nodeDepth(n);
         if (!columns.has(d)) columns.set(d, []);
         columns.get(d).push(n);
       });
       let rows = 1;
-      columns.forEach((arr) => {
+      let maxD = 0;
+      columns.forEach((arr, d) => {
         arr.sort((a, b) => String(a.name).localeCompare(String(b.name)));
         rows = Math.max(rows, arr.length);
+        maxD = Math.max(maxD, d);
       });
-      columns.forEach((arr, depth) => {
+      return { columns, rows, maxD, w: CARD_W + maxD * colW, h: rows * row };
+    });
+    let cursorX = 0;
+    let cursorY = 40;
+    let rowMax = 0;
+    tiles.forEach((tile) => {
+      if (cursorX > 0 && cursorX + tile.w > usable) {
+        cursorX = 0;
+        cursorY += rowMax + gapY;
+        rowMax = 0;
+      }
+      tile.columns.forEach((arr, depth) => {
         arr.forEach((n, i) => {
-          n.x = x0 + depth * COL_GAP;
-          n.y = y + i * row;
+          n.x = x0 + cursorX + depth * colW;
+          n.y = cursorY + i * row;
         });
       });
-      y += rows * row + gap;
+      cursorX += tile.w + gapX;
+      rowMax = Math.max(rowMax, tile.h);
     });
   }
 
-  let restoredCount = 0;
-  nodes.forEach((n) => {
-    const p = saved[n.id];
-    if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
-      n.x = p.x;
-      n.y = p.y;
-      restoredCount += 1;
-    }
-  });
-  const layoutMostlyRestored = restoredCount >= Math.max(3, nodes.length * 0.35);
-  if (!layoutMostlyRestored) {
-    placeGraph(document.getElementById("flt-cluster").checked);
-  }
+  placeGraph(document.getElementById("flt-cluster").checked);
 
   const svg = d3.select(svgEl).attr("viewBox", `0 0 ${width} ${height}`);
   const g = svg.append("g");
@@ -648,7 +689,8 @@ async function drawMap(options = {}) {
     .attr("fill", "none")
     .attr("stroke", linkStroke)
     .attr("stroke-width", 1.35)
-    .attr("stroke-opacity", linkOpacity);
+    .attr("stroke-opacity", 1)
+    .attr("opacity", linkOpacity);
 
   const linkLabels = g
     .append("g")
@@ -693,7 +735,7 @@ async function drawMap(options = {}) {
   }
   addArrowMarker("arrow", "#9aa6b5", 9);
   addArrowMarker("arrow-route", "#e11d48", 9);
-  link.attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
+  link.attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
   /** Направление ребра маршрута: link → {from, to} */
   let routeLinkDir = new Map();
 
@@ -706,16 +748,35 @@ async function drawMap(options = {}) {
       y2: to.y,
     };
   }
+  function gutterX() {
+    let max = 0;
+    nodes.forEach((n) => {
+      if (Number.isFinite(n.x)) max = Math.max(max, n.x);
+    });
+    return max + CARD_W / 2 + 36;
+  }
+  function edgeIsLocal(from, to) {
+    const a = projectKey(from);
+    const b = projectKey(to);
+    if (a && a === b) return true;
+    return Math.abs((from.y || 0) - (to.y || 0)) <= CARD_H + 24;
+  }
   function edgePath(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    const dx = Math.max(48, Math.abs(x2 - x1) * 0.45);
-    const c1x = x1 + (x1 <= x2 ? dx : -dx);
-    const c2x = x2 + (x1 <= x2 ? -dx : dx);
-    return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
+    if (edgeIsLocal(from, to)) {
+      const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
+      const c1x = x1 + (x1 <= x2 ? dx : -dx);
+      const c2x = x2 + (x1 <= x2 ? -dx : dx);
+      return `M${x1},${y1}C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
+    }
+    const gx = gutterX();
+    const into = to.x + CARD_W / 2;
+    return `M${x1},${y1}H${gx}V${y2}H${into}`;
   }
   function edgeMid(from, to) {
     const { x1, y1, x2, y2 } = edgeEnds(from, to);
-    const dx = Math.max(48, Math.abs(x2 - x1) * 0.45);
+    if (!edgeIsLocal(from, to)) return { x: gutterX(), y: (y1 + y2) / 2 };
+    const dx = Math.max(40, Math.abs(x2 - x1) * 0.45);
     const c1x = x1 + (x1 <= x2 ? dx : -dx);
     const c2x = x2 + (x1 <= x2 ? -dx : dx);
     return {
@@ -1098,7 +1159,7 @@ async function drawMap(options = {}) {
         .attr("stroke", linkStroke)
         .attr("opacity", linkOpacity)
         .attr("stroke-width", 1.35)
-        .attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
+        .attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
       linkLabels.style("visibility", "hidden");
       redrawEdges();
       return;
@@ -1212,7 +1273,7 @@ async function drawMap(options = {}) {
       .attr("stroke", linkStroke)
       .attr("opacity", linkOpacity)
       .attr("stroke-width", 1.35)
-      .attr("marker-end", (d) => (isHubLink(d) ? null : "url(#arrow)"));
+      .attr("marker-end", (d) => (linkOpacity(d) === 0 ? null : "url(#arrow)"));
     linkLabels.style("visibility", "hidden");
     redrawEdges();
     clearDrawer();
@@ -1320,14 +1381,28 @@ async function drawMap(options = {}) {
     const xs = nodes.map((n) => n.x).filter(Number.isFinite);
     const ys = nodes.map((n) => n.y).filter(Number.isFinite);
     if (!xs.length) return;
-    const padX = CARD_W / 2 + 48;
+    const padX = CARD_W / 2 + 56;
     const padY = CARD_H / 2 + 28;
     const minX = Math.min(...xs) - padX;
     const maxX = Math.max(...xs) + padX;
     const minY = Math.min(...ys) - padY;
+    const maxY = Math.max(...ys) + padY;
     const bw = Math.max(maxX - minX, 100);
-    const scale = Math.min(1, (width - 36) / bw);
-    const t = d3.zoomIdentity.translate(24 - scale * minX, 20 - scale * minY).scale(scale);
+    const bh = Math.max(maxY - minY, 100);
+    const fitAll = Math.min((width - 28) / bw, (height - 28) / bh, 1);
+    let scale;
+    let tx;
+    let ty;
+    if (fitAll >= 0.68) {
+      scale = fitAll;
+      tx = width / 2 - (scale * (minX + maxX)) / 2;
+      ty = height / 2 - (scale * (minY + maxY)) / 2;
+    } else {
+      scale = Math.min(1, (width - 28) / bw);
+      tx = 16 - scale * minX;
+      ty = 16 - scale * minY;
+    }
+    const t = d3.zoomIdentity.translate(tx, ty).scale(scale);
     framingLive = false;
     fittedOnce = true;
     svg.interrupt();
@@ -1441,23 +1516,9 @@ async function drawMap(options = {}) {
     height = nextH;
     svg.attr("viewBox", `0 0 ${width} ${height}`);
     hitbox.attr("width", width).attr("height", height);
-    const rSpread = Math.min(width, height) * 0.42;
-    const projKeys = Object.keys(projectCenters).filter((k) => k !== "_none" && k !== "external");
-    Object.keys(projectCenters).forEach((key) => {
-      if (key === "_none") {
-        projectCenters[key] = { x: width / 2, y: height / 2 };
-      } else if (key === "external") {
-        projectCenters[key] = { x: width / 2, y: height * 0.1 };
-      } else {
-        const i = projKeys.indexOf(key);
-        const angle = (i / Math.max(projKeys.length, 1)) * Math.PI * 2;
-        projectCenters[key] = {
-          x: width / 2 + Math.cos(angle) * rSpread,
-          y: height / 2 + Math.sin(angle) * rSpread * 0.88,
-        };
-      }
-    });
-    fitToScreen(false);
+    placeGraph(document.getElementById("flt-cluster").checked);
+    paintPositions();
+    frameReadable(false);
   }
   const debouncedResize = debounce(resizeMap, 180);
 
