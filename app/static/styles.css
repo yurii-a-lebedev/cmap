@@ -571,6 +571,16 @@ tr:hover td { background: rgba(15, 157, 138, 0.03); }
   border-left: 1px solid var(--line);
   transform: translateX(105%);
 }
+.map-app:not(.filters-open) .map-side,
+.map-app:not(.drawer-open) .map-drawer {
+  visibility: hidden;
+  pointer-events: none;
+}
+.map-app.filters-open .map-side,
+.map-app.drawer-open .map-drawer {
+  visibility: visible;
+  pointer-events: auto;
+}
 .map-app.filters-open .map-side { transform: translateX(0); }
 .map-app.drawer-open .map-drawer { transform: translateX(0); }
 .map-side h3, .map-drawer h3 {
